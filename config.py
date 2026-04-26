@@ -1,0 +1,147 @@
+import os
+
+# ── Models ─────────────────────────────────────────────────────────────────
+MEDSIGLIP_MODEL_ID = "google/medsiglip-448"
+MEDGEMMA_MODEL_ID  = "google/medgemma-1.5-4b-it"
+
+HF_TOKEN     = os.environ.get("HF_TOKEN")
+LORA_ADAPTER = os.environ.get("LORA_ADAPTER")  # e.g. "AryanMarwah/medgemma-trauma-lora"
+
+# ── Layer 1 — Triage ────────────────────────────────────────────────────────
+TRIAGE_IMAGE_SIZE       = 448
+TRIAGE_THRESHOLD        = float(os.environ.get("TRIAGE_THRESHOLD", "0.25"))
+TRIAGE_MAX_SLICES       = 10
+
+TRIAGE_LABELS = [
+    "CT scan showing intraabdominal hemorrhage or active bleeding",
+    "CT scan with liver laceration, splenic injury, or solid organ trauma",
+    "CT scan showing hemoperitoneum or free fluid in the abdomen",
+    "Normal CT scan of the abdomen without hemorrhage or injury",
+    "CT scan with bowel perforation or mesenteric injury",
+]
+TRIAGE_POSITIVE_INDICES = [0, 1, 2, 4]  # index 3 = "Normal" is negative
+
+# ── Layer 2 — Visual Analysis ───────────────────────────────────────────────
+VISUAL_ANALYSIS_MAX_TOKENS = 800
+
+def visual_analysis_prompt(n: int, vitals_text: str = "") -> str:
+    return (
+        f"You are a trauma radiologist analyzing {n} abdominal CT angiogram slice(s) "
+        f"from a trauma patient presented together as a volume.{vitals_text}\n\n"
+        f"Evaluate ALL {n} slices collectively as a single volume — not individually.\n"
+        "Look for: active hemorrhage, hemoperitoneum, solid organ injury "
+        "(liver, spleen, kidneys), vascular injury, bowel/mesenteric injury.\n\n"
+        "YOU MUST respond with ONLY a valid JSON object. "
+        "Do NOT write FINDINGS, IMPRESSION, or any narrative text. "
+        "Output ONLY the JSON object below, filling in the values:\n\n"
+        "{\n"
+        '  "injury_pattern": "<one sentence describing overall injury pattern across all slices>",\n'
+        '  "organs_involved": ["<organ1>", "<organ2>"],\n'
+        '  "bleeding_description": "<describe bleeding location and extent, or none if absent>",\n'
+        '  "severity_estimate": "<none|mild|moderate|severe>",\n'
+        '  "differential_diagnosis": ["<dx1>", "<dx2>", "<dx3>"]\n'
+        "}\n\n"
+        "Remember: output ONLY the JSON object, nothing else."
+    )
+
+# ── Layer 4 — Report Synthesis ──────────────────────────────────────────────
+REPORT_MAX_TOKENS = 1024
+
+def report_synthesis_prompt(ctx: dict, east_rec: str, shock_class: str, vitals_str: str) -> str:
+    triage = ctx.get("triage_summary", {})
+    organs = ", ".join(ctx.get("organs_involved", [])) or "None identified"
+    differentials = ", ".join(ctx.get("differential_diagnosis", [])) or "None listed"
+    return (
+        "You are a trauma surgery attending. Write a formal CT radiology report using the AI analysis data below.\n\n"
+        "Do NOT include any reasoning, planning, analysis, or preamble.\n"
+        "Start your response IMMEDIATELY with the word \"CLINICAL INDICATION\" on the first line.\n\n"
+        "AI ANALYSIS DATA:\n"
+        f"- MedSigLIP Triage: {triage.get('suspicious_count','?')}/{triage.get('total_slices','?')} slices suspicious "
+        f"(max score: {triage.get('max_score', 0):.2f})\n"
+        f"- Injury pattern: {ctx.get('injury_pattern', 'N/A')}\n"
+        f"- Organs involved: {organs}\n"
+        f"- Bleeding: {ctx.get('bleeding_description', 'N/A')}\n"
+        f"- Severity: {ctx.get('severity_estimate', 'N/A')}\n"
+        f"- Hemorrhage volume: {ctx.get('volume_ml', 0):.1f} mL ({shock_class})\n"
+        f"- Risk tier: {ctx.get('risk_level', 'N/A')}\n"
+        f"- Patient vitals: {vitals_str}\n"
+        f"- Differentials: {differentials}\n"
+        f"- EAST recommendation: {east_rec}\n\n"
+        "REPORT FORMAT — include ALL sections in order:\n"
+        "1. FINDINGS: injury pattern, organs, bleeding extent.\n"
+        "2. AAST GRADING: estimate AAST organ injury grade (I–V) for each involved organ.\n"
+        "3. IMPRESSION: severity + volume + risk tier (2–3 sentences).\n"
+        "4. EAST RECOMMENDATION: copy from data above verbatim.\n"
+        "5. LABS & IMAGING: list CBC, BMP, coagulation panel, type & screen; "
+        "add LFTs if hepatic, lipase if pancreatic. State imaging follow-up timing.\n\n"
+        "CLINICAL INDICATION\n"
+        "Abdominal CT angiogram for trauma evaluation.\n\n"
+        "FINDINGS"
+    )
+
+# ── Layer 5 — Q&A ───────────────────────────────────────────────────────────
+QA_MAX_TOKENS = 500
+
+def qa_context_summary(ctx: dict) -> str:
+    bleeding = ctx.get("bleeding_description", "N/A")
+    if len(bleeding) > 150 or "FINDINGS" in bleeding.upper() or "IMPRESSION" in bleeding.upper():
+        bleeding = "See initial analysis"
+    return (
+        f"Prior automated analysis of this volume:\n"
+        f"- Injury pattern: {ctx.get('injury_pattern', 'N/A')}\n"
+        f"- Organs involved: {', '.join(ctx.get('organs_involved', [])) or 'None identified'}\n"
+        f"- Bleeding: {bleeding}\n"
+        f"- Severity: {ctx.get('severity_estimate', 'N/A')}\n"
+        f"- Hemorrhage volume: {ctx.get('volume_ml', 0):.1f} mL\n"
+        f"- Risk level: {ctx.get('risk_level', 'N/A')}\n"
+        f"- Differential: {', '.join(ctx.get('differential_diagnosis', [])) or 'N/A'}\n"
+    )
+
+# ── EAST Guidelines ─────────────────────────────────────────────────────────
+EAST_RECOMMENDATIONS = {
+    "LOW": (
+        "Non-operative management (NOM) is appropriate. "
+        "Serial abdominal exams every 4–6 hours. "
+        "Maintain hemodynamic stability monitoring. "
+        "Repeat CT in 24–48 hours if clinical concern."
+    ),
+    "MODERATE": (
+        "Consider angiography with selective embolization (SAE) if hemodynamically stable. "
+        "If hemodynamically unstable despite resuscitation, proceed to OR. "
+        "Massive transfusion protocol (MTP) activation if ongoing hemorrhage. "
+        "Trauma surgery consultation required."
+    ),
+    "HIGH": (
+        "EMERGENT intervention required. "
+        "If hemodynamically unstable: immediate operative exploration. "
+        "If transiently stable: angioembolization as bridge or definitive therapy. "
+        "Activate massive transfusion protocol (1:1:1 ratio pRBC:FFP:PLT). "
+        "REBOA (Zone III) may be considered for pelvic hemorrhage. "
+        "Damage control surgery principles apply."
+    ),
+}
+
+# ── Volume / Risk ───────────────────────────────────────────────────────────
+def get_risk_level(volume_ml: float) -> str:
+    if volume_ml < 10:
+        return "LOW"
+    elif volume_ml < 500:
+        return "MODERATE"
+    return "HIGH"
+
+def get_shock_class(volume_ml: float) -> str:
+    if volume_ml < 750:
+        return "ATLS Class I"
+    elif volume_ml < 1500:
+        return "ATLS Class II"
+    elif volume_ml < 2000:
+        return "ATLS Class III"
+    return "ATLS Class IV"
+
+# ── App ─────────────────────────────────────────────────────────────────────
+UPLOAD_FOLDER      = "uploads"
+MAX_CONTENT_LENGTH = 100 * 1024 * 1024
+ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg"}
+SESSION_TTL        = 1800
+PORT               = int(os.environ.get("PORT", 7860))
+DEFAULT_SPACING    = (0.5, 0.5, 3.0)  # mm — typical abdominal CT
