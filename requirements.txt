@@ -11,3 +11,4 @@ huggingface_hub>=0.20.0
 bitsandbytes>=0.43.0
 peft>=0.10.0
 python-dotenv>=1.0.0
+pyngrok>=7.0.0

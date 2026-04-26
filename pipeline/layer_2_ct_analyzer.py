@@ -27,7 +27,7 @@ class CTVisualAnalyzer:
 
         self.model = AutoModelForImageTextToText.from_pretrained(
             self.MODEL_ID,
-            dtype=torch.bfloat16 if cuda_available else torch.float32,
+            torch_dtype=torch.bfloat16 if cuda_available else torch.float32,
             device_map=device if cuda_available else "cpu",
             quantization_config=bnb_config,
             token=token,

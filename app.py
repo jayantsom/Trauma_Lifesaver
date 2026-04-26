@@ -95,4 +95,17 @@ def health():
 
 if __name__ == "__main__":
     load_models()
-    app.run(host="0.0.0.0", port=config.PORT, debug=False, threaded=True)
+    port = config.PORT
+
+    if os.environ.get("USE_NGROK", "").lower() == "true":
+        try:
+            from pyngrok import ngrok
+            ngrok_token = os.environ.get("NGROK_TOKEN")
+            if ngrok_token:
+                ngrok.set_auth_token(ngrok_token)
+            public_url = ngrok.connect(port)
+            print(f"\n[ngrok] Public URL: {public_url}\n")
+        except ImportError:
+            print("[ngrok] pyngrok not installed — run: pip install pyngrok")
+
+    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
