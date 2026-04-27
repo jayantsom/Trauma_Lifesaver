@@ -1,17 +1,22 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Trauma Lifesaver · AI-Powered CT Analysis</title>
-    <meta name="description" content="AI-powered abdominal CT triage and hemorrhage analysis using MedGemma and MedSigLIP.">
+    <meta name="description"
+        content="AI-powered abdominal CT triage and hemorrhage analysis using MedGemma and MedSigLIP.">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
+
 <body>
 
     <!-- Theme Toggle -->
@@ -59,7 +64,8 @@
                     <span class="logo-icon"><i class="fas fa-heartbeat"></i></span>
                     <h1 class="header-brand">Trauma <span class="brand-accent">Lifesaver</span></h1>
                 </div>
-                <p class="header-sub">AI-Powered Trauma CT Analysis &nbsp;·&nbsp; MedGemma 1.5 &amp; MedSigLIP Pipeline</p>
+                <p class="header-sub">AI-Powered Trauma CT Analysis &nbsp;·&nbsp; MedGemma 1.5 &amp; MedSigLIP Pipeline
+                </p>
             </div>
             <div class="header-badges">
                 <span class="chip">MedSigLIP-448</span>
@@ -101,7 +107,8 @@
 
             <!-- Patient Metadata -->
             <div class="meta-row">
-                <span class="section-label"><i class="fas fa-id-card"></i> Patient Information <span class="optional">— optional</span></span>
+                <span class="section-label"><i class="fas fa-id-card"></i> Patient Information <span class="optional">—
+                        optional</span></span>
                 <div class="meta-inputs">
                     <div class="meta-field">
                         <label for="metaPatientId">Patient ID</label>
@@ -139,7 +146,8 @@
 
             <!-- Vitals -->
             <div class="vitals-row">
-                <span class="section-label"><i class="fas fa-stethoscope"></i> Patient Vitals <span class="optional">— optional</span></span>
+                <span class="section-label"><i class="fas fa-stethoscope"></i> Patient Vitals <span class="optional">—
+                        optional</span></span>
                 <div class="vitals-inputs">
                     <div class="vital-field">
                         <label for="vitHR">Heart Rate</label>
@@ -249,9 +257,12 @@
                         <div class="panel-header">
                             <span><i class="fas fa-eye"></i> Visual Findings</span>
                         </div>
-                        <div class="data-row"><span class="data-label">Severity</span><span class="data-value" id="severity">--</span></div>
-                        <div class="data-row"><span class="data-label">Organs</span><span class="data-value" id="organs">--</span></div>
-                        <div class="data-row"><span class="data-label">Pattern</span><span class="data-value" id="injuryPattern">--</span></div>
+                        <div class="data-row"><span class="data-label">Severity</span><span class="data-value"
+                                id="severity">--</span></div>
+                        <div class="data-row"><span class="data-label">Organs</span><span class="data-value"
+                                id="organs">--</span></div>
+                        <div class="data-row"><span class="data-label">Pattern</span><span class="data-value"
+                                id="injuryPattern">--</span></div>
                     </div>
 
                     <div class="panel glass-card">
@@ -286,7 +297,8 @@
                                 <div class="msg-avatar"><i class="fas fa-robot"></i></div>
                                 <div class="msg-body">
                                     <div class="msg-role">Trauma AI</div>
-                                    <div class="msg-text">Hello. I've analyzed the scan. Ask me anything about the findings or treatment options.</div>
+                                    <div class="msg-text">Hello. I've analyzed the scan. Ask me anything about the
+                                        findings or treatment options.</div>
                                 </div>
                             </div>
                         </div>
@@ -294,7 +306,8 @@
                             <span></span><span></span><span></span>
                         </div>
                         <div class="chat-input-area">
-                            <input type="text" id="qaInput" class="chat-input" placeholder="Ask a clinical follow-up question…">
+                            <input type="text" id="qaInput" class="chat-input"
+                                placeholder="Ask a clinical follow-up question…">
                             <button id="qaSubmit" class="btn-send">
                                 <i class="fas fa-paper-plane"></i>
                             </button>
@@ -311,12 +324,13 @@
     <footer class="disclaimer">
         <i class="fas fa-triangle-exclamation"></i>
         <strong>Research Use Only — Not for Clinical Diagnosis.</strong>
-        All reports, findings, and Q&amp;A responses are generated by experimental AI models (MedGemma, MedSigLIP, U-Net) and may contain errors or omissions.
-        This tool is intended solely for academic and research purposes.
-        <strong>Do not use these results for clinical decision-making.</strong>
-        Always consult a qualified radiologist or trauma surgeon for patient care decisions.
+        All reports, findings, and Q&amp;A responses are generated by experimental AI models (MedGemma, MedSigLIP,
+        U-Net) and may contain errors or omissions. This tool is intended solely for academic and research purposes. Do
+        not use these results for clinical decision-making. Consult a qualified radiologist or trauma surgeon for
+        patient care decisions.
     </footer>
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
+
 </html>

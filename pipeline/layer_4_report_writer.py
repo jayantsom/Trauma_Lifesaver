@@ -62,11 +62,15 @@ class ClinicalReportWriter:
         report = self.va.processor.decode(output[0][input_len:], skip_special_tokens=True).strip()
 
         import re
-        full_report_m = re.search(r'^CLINICAL INDICATION', report, re.MULTILINE | re.IGNORECASE)
-        if full_report_m:
-            report = report[full_report_m.start():].strip()
+        # Strip MedGemma thinking tokens: <unused94>...<unused95>
+        report = re.sub(r'<unused\d+>[\s\S]*?<unused\d+>', '', report).strip()
+
+        # Find CLINICAL INDICATION anywhere in the output (no ^ anchor — thinking tag may precede it)
+        m = re.search(r'CLINICAL INDICATION', report, re.IGNORECASE)
+        if m:
+            report = report[m.start():].strip()
         else:
-            report = "CLINICAL INDICATION\nAbdominal CT angiogram for trauma evaluation.\n\nFINDINGS\n" + report
+            report = "CLINICAL INDICATION\n" + report
 
         return report
 

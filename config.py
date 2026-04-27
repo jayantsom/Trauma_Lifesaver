@@ -10,7 +10,7 @@ LORA_ADAPTER = os.environ.get("LORA_ADAPTER")  # e.g. "AryanMarwah/medgemma-trau
 # ── Layer 1 — Triage ────────────────────────────────────────────────────────
 TRIAGE_IMAGE_SIZE       = 448
 TRIAGE_THRESHOLD        = float(os.environ.get("TRIAGE_THRESHOLD", "0.25"))
-TRIAGE_MAX_SLICES       = 2   # max slices sent to Gemma (keep low to avoid OOM)
+TRIAGE_MAX_SLICES       = 1   # top-1 slice to Gemma — avoids OOM and tunnel timeout
 
 TRIAGE_LABELS = [
     "CT scan showing intraabdominal hemorrhage or active bleeding",
@@ -52,31 +52,29 @@ def report_synthesis_prompt(ctx: dict, east_rec: str, shock_class: str, vitals_s
     indication = ctx.get("clinical_notes") or "Abdominal CT angiogram for trauma evaluation."
     injury_pat = ctx.get("injury_pattern", "Not determined")
     bleeding   = ctx.get("bleeding_description", "Not identified")
+    severity   = ctx.get("severity_estimate", "unknown")
+    volume     = ctx.get("volume_ml", 0)
+    risk       = ctx.get("risk_level", "LOW")
 
     return (
-        "You are a trauma surgery attending. Write a formal CT radiology report.\n"
-        "Do NOT include preamble, reasoning, or planning.\n"
-        "Start IMMEDIATELY with: CLINICAL INDICATION\n\n"
-        "AI ANALYSIS DATA:\n"
-        f"- MedSigLIP Triage: {triage.get('suspicious_count','?')}/{triage.get('total_slices','?')} slices suspicious "
-        f"(max score: {triage.get('max_score', 0):.2f})\n"
-        f"- Injury pattern: {injury_pat}\n"
-        f"- Organs involved: {organs}\n"
-        f"- Bleeding: {bleeding}\n"
-        f"- Severity: {ctx.get('severity_estimate', 'N/A')}\n"
-        f"- Hemorrhage volume: {ctx.get('volume_ml', 0):.1f} mL ({shock_class})\n"
-        f"- Risk tier: {ctx.get('risk_level', 'N/A')}\n"
-        f"- Patient vitals: {vitals_str}\n"
-        f"- Differentials: {differentials}\n"
-        f"- EAST recommendation: {east_rec}\n\n"
-        "Write the report with ALL these sections in order, each heading in ALL CAPS on its own line:\n"
-        "CLINICAL INDICATION\n"
+        "You are a trauma radiology attending. Complete the formal CT report below.\n"
+        "Fill in each section using the AI analysis data provided. Be concise and clinical.\n"
+        "Do NOT repeat the instructions. Do NOT output your reasoning. Just write the report.\n\n"
+        "=== AI ANALYSIS DATA ===\n"
+        f"Triage: {triage.get('suspicious_count','?')}/{triage.get('total_slices','?')} slices suspicious "
+        f"(max score {triage.get('max_score',0):.2f})\n"
+        f"Injury pattern: {injury_pat}\n"
+        f"Organs involved: {organs}\n"
+        f"Bleeding: {bleeding}\n"
+        f"Severity: {severity}\n"
+        f"Hemorrhage volume: {volume:.1f} mL ({shock_class})\n"
+        f"Risk tier: {risk}\n"
+        f"Vitals: {vitals_str}\n"
+        f"Differentials: {differentials}\n"
+        f"EAST recommendation: {east_rec}\n\n"
+        "=== REPORT (complete all sections) ===\n\n"
+        f"CLINICAL INDICATION\n{indication}\n\n"
         "FINDINGS\n"
-        "AAST GRADING (detail each involved organ with grade I-V and brief rationale)\n"
-        "IMPRESSION\n"
-        "EAST RECOMMENDATION\n"
-        "LABS & IMAGING\n\n"
-        f"CLINICAL INDICATION\n{indication}\n"
     )
 
 # ── Layer 5 — Q&A ───────────────────────────────────────────────────────────
