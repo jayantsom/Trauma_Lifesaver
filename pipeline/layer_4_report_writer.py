@@ -1,5 +1,21 @@
+import re
 import torch
 import config
+
+def _deloop(text: str, min_len: int = 60, max_repeats: int = 2) -> str:
+    """Truncate text when a sentence of >=min_len chars repeats more than max_repeats times."""
+    # Split on sentence-ending punctuation but keep the delimiter with the sentence
+    parts = re.split(r'(?<=[.!?])\s+', text)
+    seen: dict = {}
+    kept = []
+    for p in parts:
+        key = p.strip().lower()
+        if len(key) >= min_len:
+            seen[key] = seen.get(key, 0) + 1
+            if seen[key] > max_repeats:
+                break
+        kept.append(p)
+    return ' '.join(kept).strip()
 
 class ClinicalReportWriter:
     """Layer 4: Synthesize EAST-aligned formal report."""
@@ -45,7 +61,10 @@ class ClinicalReportWriter:
             return self.va.model.generate(
                 **inputs,
                 max_new_tokens=800,
-                do_sample=False,
+                do_sample=True,
+                temperature=0.2,
+                top_p=0.92,
+                repetition_penalty=1.3,
             )
 
         try:
@@ -62,8 +81,11 @@ class ClinicalReportWriter:
         report_raw = self.va.processor.decode(output[0][input_len:], skip_special_tokens=True).strip()
 
         import re
-        # Strip MedGemma thinking tokens
+        # Strip thinking tokens
         report_raw = re.sub(r'<unused\d+>[\s\S]*?<unused\d+>', '', report_raw).strip()
+
+        # Detect and truncate repetition loops (3+ repeats of any 60-char sentence)
+        report_raw = _deloop(report_raw)
 
         # The prompt pre-built CLINICAL INDICATION + FINDINGS and asked Gemma to start at AAST GRADING.
         # Reconstruct: prepend the pre-built block, then append Gemma's continuation.

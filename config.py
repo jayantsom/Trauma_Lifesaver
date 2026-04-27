@@ -102,7 +102,7 @@ def report_synthesis_prompt(ctx: dict, east_rec: str, shock_class: str, vitals_s
 
 
 # ── Layer 5 — Q&A ───────────────────────────────────────────────────────────
-QA_MAX_TOKENS = 500
+QA_MAX_TOKENS = 600
 
 def qa_context_summary(ctx: dict) -> str:
     bleeding = ctx.get("bleeding_description", "N/A")

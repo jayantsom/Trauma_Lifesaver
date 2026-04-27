@@ -75,7 +75,10 @@ class CTVisualAnalyzer:
             generation = self.model.generate(
                 **inputs,
                 max_new_tokens=config.VISUAL_ANALYSIS_MAX_TOKENS,
-                do_sample=False,
+                do_sample=True,
+                temperature=0.15,
+                top_p=0.92,
+                repetition_penalty=1.2,
             )
 
         raw = self.processor.decode(generation[0][input_len:], skip_special_tokens=True)

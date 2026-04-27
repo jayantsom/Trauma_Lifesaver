@@ -1,3 +1,4 @@
+import re
 import threading
 import torch
 from transformers import TextIteratorStreamer
@@ -21,7 +22,8 @@ class QAStreamer:
         content.append({"type": "text", "text": (
             f"{context_summary}\n"
             f"You are a trauma radiologist. Answer the following clinical question "
-            f"concisely and accurately based on these CT slices and the analysis above.\n\n"
+            f"accurately and in detail based on these CT slices and the analysis above. "
+            f"Use proper medical terminology. Do not repeat yourself.\n\n"
             f"Question: {question}"
         )})
 
@@ -39,7 +41,10 @@ class QAStreamer:
             **inputs,
             "streamer": streamer,
             "max_new_tokens": config.QA_MAX_TOKENS,
-            "do_sample": False,
+            "do_sample": True,
+            "temperature": 0.2,
+            "top_p": 0.92,
+            "repetition_penalty": 1.3,
         }
 
         def generation_task():
@@ -56,7 +61,27 @@ class QAStreamer:
         thread = threading.Thread(target=generation_task)
         thread.start()
 
+        # Accumulate a small prefix to strip any leading thinking block,
+        # then stream the remainder token-by-token.
+        prefix_buf = ""
+        prefix_done = False
         for token in streamer:
-            yield token
+            if not prefix_done:
+                prefix_buf += token
+                # Once we have enough text to detect (or rule out) a thinking block:
+                if len(prefix_buf) > 20 or '<unused' not in prefix_buf:
+                    # Strip any <unusedXX>...</unusedXX> thinking block from prefix
+                    cleaned = re.sub(r'<unused\d+>[\s\S]*?<unused\d+>', '', prefix_buf).strip()
+                    if cleaned:
+                        yield cleaned
+                    prefix_done = True
+            else:
+                yield token
+
+        # Flush any remaining prefix if stream ended before threshold
+        if not prefix_done and prefix_buf:
+            cleaned = re.sub(r'<unused\d+>[\s\S]*?<unused\d+>', '', prefix_buf).strip()
+            if cleaned:
+                yield cleaned
 
         thread.join()
