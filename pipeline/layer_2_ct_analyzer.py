@@ -56,9 +56,9 @@ class CTVisualAnalyzer:
 
         print(f"[Layer 2 - CTVisualAnalyzer] Ready on {self._device}. Max slices: {self.max_qa_slices}")
 
-    def run_visual_analysis(self, pil_images: list, vitals: dict = None) -> dict:
+    def run_visual_analysis(self, pil_images: list, vitals: dict = None, patient_info: dict = None) -> dict:
         slices = pil_images[: self.max_qa_slices]
-        content = self._build_content(slices, vitals)
+        content = self._build_content(slices, vitals, patient_info)
         messages = [{"role": "user", "content": content}]
 
         inputs = self.processor.apply_chat_template(
@@ -81,17 +81,21 @@ class CTVisualAnalyzer:
         raw = self.processor.decode(generation[0][input_len:], skip_special_tokens=True)
         return self._parse_findings(raw)
 
-    def _build_content(self, slices: list, vitals: dict = None) -> list:
+    def _build_content(self, slices: list, vitals: dict = None, patient_info: dict = None) -> list:
         content = []
         for i, img in enumerate(slices):
             content.append({"type": "image", "image": img.convert("RGB")})
             content.append({"type": "text", "text": f"[CT Slice {i + 1} of {len(slices)}]"})
 
-        vitals_text = ""
+        context_parts = []
+        if patient_info:
+            if patient_info.get("age"):   context_parts.append(f"Age {patient_info['age']} years")
+            if patient_info.get("state"): context_parts.append(f"Clinical state: {patient_info['state']}")
         if vitals:
             parts = [f"{k.upper()} {v}" for k, v in vitals.items() if v]
-            if parts:
-                vitals_text = f"\nPatient vitals: {', '.join(parts)}."
+            if parts: context_parts.append(f"Vitals: {', '.join(parts)}")
+
+        vitals_text = ("\nPatient context: " + "; ".join(context_parts) + ".") if context_parts else ""
 
         content.append({"type": "text", "text": config.visual_analysis_prompt(len(slices), vitals_text)})
         return content
@@ -121,21 +125,41 @@ class CTVisualAnalyzer:
                         except json.JSONDecodeError:
                             break
 
-        severity = "unknown"
+        # Aggressive text extraction fallback when JSON completely fails
         raw_lower = raw.lower()
-        if "no acute" in raw_lower or "no injury" in raw_lower: severity = "none"
+
+        severity = "unknown"
+        if any(w in raw_lower for w in ["no acute", "no injury", "unremarkable", "normal"]): severity = "none"
         elif "severe" in raw_lower: severity = "severe"
         elif "moderate" in raw_lower: severity = "moderate"
         elif "mild" in raw_lower: severity = "mild"
 
+        # Extract injury pattern from first non-empty line
+        import re
+        injury_pattern = "Unable to determine from image"
+        for line in raw.strip().split("\n"):
+            line = line.strip().lstrip('{"').strip()
+            if len(line) > 20 and not line.startswith(("{", "}", "[", "You", "CT", "Slice")):
+                injury_pattern = line[:200].rstrip(',": ')
+                break
+
+        # Extract organs mentioned
+        organ_keywords = ["liver", "spleen", "kidney", "bowel", "mesentery", "bladder",
+                          "pancreas", "aorta", "stomach", "lung", "colon", "rectum"]
+        organs = [o.capitalize() for o in organ_keywords if o in raw_lower]
+
+        # Extract bleeding
         bleeding = "Not identified"
-        if "findings:" in raw_lower:
-            f_start = raw_lower.find("findings:") + 9
-            bleeding = raw[f_start:f_start + 120].strip().rstrip(",. ") or bleeding
+        for pat in [r'bleeding[:\s]+([^.\n]+)', r'hemorrhage[:\s]+([^.\n]+)',
+                    r'hemoperitoneum[:\s]+([^.\n]+)', r'free fluid[:\s]+([^.\n]+)']:
+            m = re.search(pat, raw_lower)
+            if m:
+                bleeding = raw[m.start(1):m.start(1)+150].strip()
+                break
 
         return {
-            "injury_pattern": "See raw response (model did not return JSON)",
-            "organs_involved": [],
+            "injury_pattern": injury_pattern,
+            "organs_involved": organs,
             "bleeding_description": bleeding,
             "severity_estimate": severity,
             "differential_diagnosis": [],

@@ -59,10 +59,15 @@ def upload():
         "gcs": request.form.get("gcs"),
     }
     vitals = {k: v for k, v in vitals.items() if v}
+    patient_info = {
+        "age":   request.form.get("age"),
+        "state": request.form.get("clinical_state"),
+    }
+    patient_info = {k: v for k, v in patient_info.items() if v}
     patient_id = request.form.get("patient_id") or f"PT-{uuid.uuid4().hex[:6].upper()}"
 
     try:
-        result = pipeline.run_pipeline(image_paths, vitals, patient_id)
+        result = pipeline.run_pipeline(image_paths, vitals, patient_id, patient_info)
         return jsonify({"success": True, "result": result})
     except torch.cuda.OutOfMemoryError:
         torch.cuda.empty_cache()

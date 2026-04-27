@@ -179,6 +179,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const formData = new FormData();
         files.forEach(f => formData.append('files', f));
         if (el.metaPatientId.value.trim()) formData.append('patient_id', el.metaPatientId.value.trim());
+        if (el.metaAge.value.trim())       formData.append('age',        el.metaAge.value.trim());
+        if (el.metaState.value)            formData.append('clinical_state', el.metaState.value);
         if (el.vitHR.value.trim())  formData.append('hr',  el.vitHR.value.trim());
         if (el.vitBP.value.trim())  formData.append('bp',  el.vitBP.value.trim());
         if (el.vitGCS.value.trim()) formData.append('gcs', el.vitGCS.value.trim());
@@ -330,7 +332,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // ── Markdown renderer ──────────────────────────────────────────────
+    function renderMarkdown(text) {
+        return text
+            .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.+?)\*/g, '<em>$1</em>')
+            .replace(/^#{3}\s+(.+)$/gm, '<strong>$1</strong>')
+            .replace(/^#{1,2}\s+(.+)$/gm, '<strong style="font-size:1em">$1</strong>')
+            .replace(/^[-*]\s+(.+)$/gm, '<li>$1</li>')
+            .replace(/(<li>[\s\S]*?<\/li>)/g, '<ul>$1</ul>')
+            .replace(/\n\n/g, '<br><br>')
+            .replace(/\n/g, '<br>');
+    }
+
     // ── Q&A ────────────────────────────────────────────────────────────
+
     el.qaSubmit.addEventListener('click', submitQuestion);
     el.qaInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitQuestion(); }
@@ -344,7 +361,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         appendMessage('You', q, 'user');
         el.qaInput.value = '';
-        const aiTextEl = appendMessage('MedGemma', '', 'ai');
+        const aiTextEl = appendMessage('Trauma AI', '', 'ai');
+        let aiRawText = '';
         el.qaSubmit.disabled = true;
         el.typingIndicator.classList.remove('hidden');
         qaStreaming = true;
@@ -358,10 +376,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 el.qaSubmit.disabled = false;
                 el.typingIndicator.classList.add('hidden');
                 qaStreaming = false;
+                // Final render: convert accumulated text to HTML
+                aiRawText += '';
+                aiTextEl.innerHTML = renderMarkdown(aiRawText);
                 return;
             }
             el.typingIndicator.classList.add('hidden');
-            aiTextEl.textContent += e.data;
+            aiRawText += e.data;
+            aiTextEl.innerHTML = renderMarkdown(aiRawText);
             scrollChat();
         };
 

@@ -31,7 +31,7 @@ class TraumaPipeline:
         
         self._sessions = {}
 
-    def run_pipeline(self, image_paths: list, vitals: dict = None, patient_id: str = None) -> dict:
+    def run_pipeline(self, image_paths: list, vitals: dict = None, patient_id: str = None, patient_info: dict = None) -> dict:
         session_id = str(uuid.uuid4())
         pil_images = [Image.open(p).convert("RGB") for p in image_paths]
 
@@ -39,12 +39,16 @@ class TraumaPipeline:
         suspicious_images, all_triage = self.triager.get_top_suspicious(pil_images)
         triage_summary = self.triager.summarize_triage(all_triage)
 
-        # Layer 2
+        # Layer 2 — pass vitals + patient info for better context
         try:
-            visual_findings = self.visual_analyzer.run_visual_analysis(suspicious_images, vitals)
+            visual_findings = self.visual_analyzer.run_visual_analysis(
+                suspicious_images, vitals, patient_info
+            )
         except torch.cuda.OutOfMemoryError:
             torch.cuda.empty_cache()
-            visual_findings = self.visual_analyzer.run_visual_analysis(suspicious_images[:1], vitals)
+            visual_findings = self.visual_analyzer.run_visual_analysis(
+                suspicious_images[:1], vitals, patient_info
+            )
 
         # Layer 3 + Quantifier
         masks = []
@@ -65,6 +69,7 @@ class TraumaPipeline:
             **visual_findings,
             **quant_res,
             "vitals": vitals or {},
+            "patient_info": patient_info or {},
             "triage_summary": triage_summary,
             "patient_id": patient_id,
         }

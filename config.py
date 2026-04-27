@@ -27,21 +27,22 @@ VISUAL_ANALYSIS_MAX_TOKENS = 800
 def visual_analysis_prompt(n: int, vitals_text: str = "") -> str:
     return (
         f"You are a trauma radiologist analyzing {n} abdominal CT angiogram slice(s) "
-        f"from a trauma patient presented together as a volume.{vitals_text}\n\n"
-        f"Evaluate ALL {n} slices collectively as a single volume — not individually.\n"
-        "Look for: active hemorrhage, hemoperitoneum, solid organ injury "
-        "(liver, spleen, kidneys), vascular injury, bowel/mesenteric injury.\n\n"
-        "YOU MUST respond with ONLY a valid JSON object. "
-        "Do NOT write FINDINGS, IMPRESSION, or any narrative text. "
-        "Output ONLY the JSON object below, filling in the values:\n\n"
+        f"from a trauma patient.{vitals_text}\n\n"
+        f"Examine ALL {n} images collectively as one volume. "
+        "Identify: active hemorrhage, hemoperitoneum, solid organ injury (liver, spleen, kidneys), "
+        "vascular injury, bowel/mesenteric injury.\n\n"
+        "CRITICAL INSTRUCTION: Your ENTIRE response must be ONLY a single raw JSON object. "
+        "Do NOT write any text before or after the JSON. "
+        "Do NOT write FINDINGS, IMPRESSION, ASSESSMENT, or markdown. "
+        "Start your response with { and end with }.\n\n"
+        "Required JSON format:\n"
         "{\n"
-        '  "injury_pattern": "<one sentence describing overall injury pattern across all slices>",\n'
-        '  "organs_involved": ["<organ1>", "<organ2>"],\n'
-        '  "bleeding_description": "<describe bleeding location and extent, or none if absent>",\n'
+        '  "injury_pattern": "<one concise sentence>",\n'
+        '  "organs_involved": ["<organ>"],\n'
+        '  "bleeding_description": "<location and extent, or none>",\n'
         '  "severity_estimate": "<none|mild|moderate|severe>",\n'
         '  "differential_diagnosis": ["<dx1>", "<dx2>", "<dx3>"]\n'
-        "}\n\n"
-        "Remember: output ONLY the JSON object, nothing else."
+        "}\n"
     )
 
 # ── Layer 4 — Report Synthesis ──────────────────────────────────────────────
@@ -67,16 +68,13 @@ def report_synthesis_prompt(ctx: dict, east_rec: str, shock_class: str, vitals_s
         f"- Patient vitals: {vitals_str}\n"
         f"- Differentials: {differentials}\n"
         f"- EAST recommendation: {east_rec}\n\n"
-        "REPORT FORMAT — include ALL sections in order:\n"
-        "1. FINDINGS: injury pattern, organs, bleeding extent.\n"
-        "2. AAST GRADING: estimate AAST organ injury grade (I–V) for each involved organ.\n"
-        "3. IMPRESSION: severity + volume + risk tier (2–3 sentences).\n"
-        "4. EAST RECOMMENDATION: copy from data above verbatim.\n"
-        "5. LABS & IMAGING: list CBC, BMP, coagulation panel, type & screen; "
-        "add LFTs if hepatic, lipase if pancreatic. State imaging follow-up timing.\n\n"
-        "CLINICAL INDICATION\n"
-        "Abdominal CT angiogram for trauma evaluation.\n\n"
-        "FINDINGS"
+        "REPORT FORMAT — include ALL sections in this exact order (write each heading in ALL CAPS):\n"
+        "FINDINGS — injury pattern, organs, bleeding extent.\n"
+        "AAST GRADING — estimate AAST organ injury grade (I-V) only for organs actually involved.\n"
+        "IMPRESSION — severity + volume + risk tier (2-3 sentences).\n"
+        "EAST RECOMMENDATION — copy verbatim from data above.\n"
+        "LABS & IMAGING — CBC, BMP, coagulation panel, type & screen; add LFTs if hepatic, lipase if pancreatic. Include imaging follow-up timing.\n\n"
+        "Begin your response immediately with: CLINICAL INDICATION"
     )
 
 # ── Layer 5 — Q&A ───────────────────────────────────────────────────────────
