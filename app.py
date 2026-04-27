@@ -93,6 +93,20 @@ def health():
     if pipeline is None: return jsonify({"status": "loading", "models_loaded": False}), 503
     return jsonify({"status": "ok", **pipeline.get_status()})
 
+@app.errorhandler(Exception)
+def handle_exception(e):
+    import traceback
+    print(traceback.format_exc())
+    return jsonify({"success": False, "error": str(e)}), 500
+
+@app.errorhandler(413)
+def too_large(e):
+    return jsonify({"success": False, "error": "File too large (max 100 MB)."}), 413
+
+@app.errorhandler(500)
+def server_error(e):
+    return jsonify({"success": False, "error": str(e)}), 500
+
 if __name__ == "__main__":
     load_models()
     port = config.PORT

@@ -57,6 +57,10 @@ class TraumaPipeline:
         combined_mask = np.stack(masks, axis=0) if masks else np.zeros((1, 512, 512), dtype=np.uint8)
         quant_res = quantify_hemorrhage(combined_mask)
 
+        # Free GPU memory before Layer 4 (report synthesis reuses MedGemma)
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
         context = {
             **visual_findings,
             **quant_res,

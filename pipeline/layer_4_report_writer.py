@@ -18,7 +18,7 @@ class ClinicalReportWriter:
         risk = ctx.get("risk_level", "LOW")
         east_rec = config.EAST_RECOMMENDATIONS.get(risk, config.EAST_RECOMMENDATIONS["LOW"])
         shock_class = config.get_shock_class(ctx.get("volume_ml", 0))
-        
+
         vitals = ctx.get("vitals") or {}
         vitals_str = ", ".join(f"{k.upper()} {v}" for k, v in vitals.items() if v) or "Not provided"
 
@@ -31,6 +31,10 @@ class ClinicalReportWriter:
         inputs = {k: v.to(self.va._device) for k, v in inputs.items()}
         input_len = inputs["input_ids"].shape[-1]
 
+        # Clear residual GPU memory from earlier layers
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
         try:
             from peft import PeftModel
             use_disable = isinstance(self.va.model, PeftModel)
@@ -39,16 +43,21 @@ class ClinicalReportWriter:
 
         def _generate():
             return self.va.model.generate(
-                **inputs, max_new_tokens=config.REPORT_MAX_TOKENS, do_sample=False,
-                repetition_penalty=1.15, no_repeat_ngram_size=4
+                **inputs,
+                max_new_tokens=700,   # reduced from 1024 for speed
+                do_sample=False,
             )
 
-        with torch.inference_mode():
-            if use_disable:
-                with self.va.model.disable_adapter():
+        try:
+            with torch.inference_mode():
+                if use_disable:
+                    with self.va.model.disable_adapter():
+                        output = _generate()
+                else:
                     output = _generate()
-            else:
-                output = _generate()
+        except torch.cuda.OutOfMemoryError:
+            torch.cuda.empty_cache()
+            raise RuntimeError("GPU OOM during report synthesis — falling back to template.")
 
         report = self.va.processor.decode(output[0][input_len:], skip_special_tokens=True).strip()
 
@@ -60,6 +69,7 @@ class ClinicalReportWriter:
             report = "CLINICAL INDICATION\nAbdominal CT angiogram for trauma evaluation.\n\nFINDINGS\n" + report
 
         return report
+
 
     def _template_fallback(self, ctx: dict) -> str:
         risk = ctx.get("risk_level", "LOW")
