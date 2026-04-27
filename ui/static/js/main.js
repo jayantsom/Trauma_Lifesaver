@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
         metaPatientId:      document.getElementById('metaPatientId'),
         metaAge:            document.getElementById('metaAge'),
         metaState:          document.getElementById('metaState'),
+        clinicalNotes:      document.getElementById('clinicalNotes'),
         vitHR:              document.getElementById('vitHR'),
         vitBP:              document.getElementById('vitBP'),
         vitGCS:             document.getElementById('vitGCS'),
@@ -96,17 +97,44 @@ document.addEventListener('DOMContentLoaded', () => {
         el.analyzeBtn.disabled = false;
         el.analyzeHint.textContent = `${n} CT slice${n !== 1 ? 's' : ''} ready`;
 
-        // Generate thumbnails in upload zone
+        // Generate thumbnails with delete buttons
         el.ctThumbnails.innerHTML = '';
         valid.forEach((file, i) => {
             const reader = new FileReader();
             reader.onload = (e) => {
                 previewUrls[i] = e.target.result;
+                const wrap = document.createElement('div');
+                wrap.className = 'ct-thumb-wrap';
+
                 const img = document.createElement('img');
                 img.src = e.target.result;
                 img.className = 'ct-thumb';
                 img.title = file.name;
-                el.ctThumbnails.appendChild(img);
+
+                const del = document.createElement('button');
+                del.className = 'ct-thumb-delete';
+                del.innerHTML = '<i class="fas fa-times"></i>';
+                del.title = 'Remove slice';
+                del.addEventListener('click', (ev) => {
+                    ev.stopPropagation();
+                    stagedFiles = stagedFiles.filter((_, j) => j !== i);
+                    previewUrls[i] = null;
+                    wrap.remove();
+                    const remaining = el.ctThumbnails.querySelectorAll('.ct-thumb-wrap').length;
+                    if (remaining === 0) {
+                        el.ctThumbnails.classList.add('hidden');
+                        el.fileCountBadge.classList.add('hidden');
+                        el.analyzeBtn.disabled = true;
+                        el.analyzeHint.textContent = 'Select CT slices to begin';
+                    } else {
+                        el.fileCountText.textContent = `${remaining} file${remaining !== 1 ? 's' : ''} staged`;
+                        el.analyzeHint.textContent = `${remaining} CT slice${remaining !== 1 ? 's' : ''} ready`;
+                    }
+                });
+
+                wrap.appendChild(img);
+                wrap.appendChild(del);
+                el.ctThumbnails.appendChild(wrap);
             };
             reader.readAsDataURL(file);
         });
@@ -178,9 +206,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const formData = new FormData();
         files.forEach(f => formData.append('files', f));
-        if (el.metaPatientId.value.trim()) formData.append('patient_id', el.metaPatientId.value.trim());
-        if (el.metaAge.value.trim())       formData.append('age',        el.metaAge.value.trim());
+        if (el.metaPatientId.value.trim()) formData.append('patient_id',     el.metaPatientId.value.trim());
+        if (el.metaAge.value.trim())       formData.append('age',            el.metaAge.value.trim());
         if (el.metaState.value)            formData.append('clinical_state', el.metaState.value);
+        if (el.clinicalNotes && el.clinicalNotes.value.trim()) formData.append('clinical_notes', el.clinicalNotes.value.trim());
         if (el.vitHR.value.trim())  formData.append('hr',  el.vitHR.value.trim());
         if (el.vitBP.value.trim())  formData.append('bp',  el.vitBP.value.trim());
         if (el.vitGCS.value.trim()) formData.append('gcs', el.vitGCS.value.trim());
@@ -376,14 +405,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 el.qaSubmit.disabled = false;
                 el.typingIndicator.classList.add('hidden');
                 qaStreaming = false;
-                // Final render: convert accumulated text to HTML
-                aiRawText += '';
+                // Render full markdown now that stream is complete
                 aiTextEl.innerHTML = renderMarkdown(aiRawText);
+                scrollChat();
                 return;
             }
             el.typingIndicator.classList.add('hidden');
+            // Show raw text while streaming (markdown on partial tokens breaks formatting)
             aiRawText += e.data;
-            aiTextEl.innerHTML = renderMarkdown(aiRawText);
+            aiTextEl.textContent = aiRawText;
             scrollChat();
         };
 
@@ -450,6 +480,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (el.metaPatientId) el.metaPatientId.value = '';
         if (el.metaAge)       el.metaAge.value = '';
         if (el.metaState)     el.metaState.value = '';
+        if (el.clinicalNotes) el.clinicalNotes.value = '';
 
         el.resultsContainer.classList.add('hidden');
         hideError();

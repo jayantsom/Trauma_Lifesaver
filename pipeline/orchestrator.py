@@ -39,18 +39,18 @@ class TraumaPipeline:
         suspicious_images, all_triage = self.triager.get_top_suspicious(pil_images)
         triage_summary = self.triager.summarize_triage(all_triage)
 
-        # Layer 2 — pass vitals + patient info for better context
+        # Layer 2 — top suspicious slices only (capped to avoid OOM)
         try:
             visual_findings = self.visual_analyzer.run_visual_analysis(
-                suspicious_images, vitals, patient_info
+                suspicious_images, vitals
             )
         except torch.cuda.OutOfMemoryError:
             torch.cuda.empty_cache()
             visual_findings = self.visual_analyzer.run_visual_analysis(
-                suspicious_images[:1], vitals, patient_info
+                suspicious_images[:1], vitals
             )
 
-        # Layer 3 + Quantifier
+        # Layer 3 — U-Net segments ALL uploaded slices (one at a time, memory-safe)
         masks = []
         for path in image_paths:
             try:
@@ -61,6 +61,7 @@ class TraumaPipeline:
         combined_mask = np.stack(masks, axis=0) if masks else np.zeros((1, 512, 512), dtype=np.uint8)
         quant_res = quantify_hemorrhage(combined_mask)
 
+
         # Free GPU memory before Layer 4 (report synthesis reuses MedGemma)
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
@@ -70,6 +71,7 @@ class TraumaPipeline:
             **quant_res,
             "vitals": vitals or {},
             "patient_info": patient_info or {},
+            "clinical_notes": (patient_info or {}).get("clinical_notes", ""),
             "triage_summary": triage_summary,
             "patient_id": patient_id,
         }

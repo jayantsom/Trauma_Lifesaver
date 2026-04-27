@@ -10,7 +10,7 @@ LORA_ADAPTER = os.environ.get("LORA_ADAPTER")  # e.g. "AryanMarwah/medgemma-trau
 # ── Layer 1 — Triage ────────────────────────────────────────────────────────
 TRIAGE_IMAGE_SIZE       = 448
 TRIAGE_THRESHOLD        = float(os.environ.get("TRIAGE_THRESHOLD", "0.25"))
-TRIAGE_MAX_SLICES       = 10
+TRIAGE_MAX_SLICES       = 2   # max slices sent to Gemma (keep low to avoid OOM)
 
 TRIAGE_LABELS = [
     "CT scan showing intraabdominal hemorrhage or active bleeding",
@@ -26,23 +26,20 @@ VISUAL_ANALYSIS_MAX_TOKENS = 800
 
 def visual_analysis_prompt(n: int, vitals_text: str = "") -> str:
     return (
-        f"You are a trauma radiologist analyzing {n} abdominal CT angiogram slice(s) "
-        f"from a trauma patient.{vitals_text}\n\n"
-        f"Examine ALL {n} images collectively as one volume. "
+        f"You are a trauma radiologist analyzing {n} abdominal CT angiogram slice(s).{vitals_text}\n\n"
+        f"Examine ALL {n} images collectively. "
         "Identify: active hemorrhage, hemoperitoneum, solid organ injury (liver, spleen, kidneys), "
         "vascular injury, bowel/mesenteric injury.\n\n"
-        "CRITICAL INSTRUCTION: Your ENTIRE response must be ONLY a single raw JSON object. "
-        "Do NOT write any text before or after the JSON. "
-        "Do NOT write FINDINGS, IMPRESSION, ASSESSMENT, or markdown. "
-        "Start your response with { and end with }.\n\n"
-        "Required JSON format:\n"
+        "CRITICAL: Respond with ONLY a raw JSON object. "
+        "No text before or after. No FINDINGS, IMPRESSION, or markdown. "
+        "Start with { and end with }.\n\n"
         "{\n"
         '  "injury_pattern": "<one concise sentence>",\n'
         '  "organs_involved": ["<organ>"],\n'
         '  "bleeding_description": "<location and extent, or none>",\n'
         '  "severity_estimate": "<none|mild|moderate|severe>",\n'
         '  "differential_diagnosis": ["<dx1>", "<dx2>", "<dx3>"]\n'
-        "}\n"
+        "}"
     )
 
 # ── Layer 4 — Report Synthesis ──────────────────────────────────────────────
@@ -52,29 +49,34 @@ def report_synthesis_prompt(ctx: dict, east_rec: str, shock_class: str, vitals_s
     triage = ctx.get("triage_summary", {})
     organs = ", ".join(ctx.get("organs_involved", [])) or "None identified"
     differentials = ", ".join(ctx.get("differential_diagnosis", [])) or "None listed"
+    indication = ctx.get("clinical_notes") or "Abdominal CT angiogram for trauma evaluation."
+    injury_pat = ctx.get("injury_pattern", "Not determined")
+    bleeding   = ctx.get("bleeding_description", "Not identified")
+
     return (
-        "You are a trauma surgery attending. Write a formal CT radiology report using the AI analysis data below.\n\n"
-        "Do NOT include any reasoning, planning, analysis, or preamble.\n"
-        "Start your response IMMEDIATELY with the word \"CLINICAL INDICATION\" on the first line.\n\n"
+        "You are a trauma surgery attending. Write a formal CT radiology report.\n"
+        "Do NOT include preamble, reasoning, or planning.\n"
+        "Start IMMEDIATELY with: CLINICAL INDICATION\n\n"
         "AI ANALYSIS DATA:\n"
         f"- MedSigLIP Triage: {triage.get('suspicious_count','?')}/{triage.get('total_slices','?')} slices suspicious "
         f"(max score: {triage.get('max_score', 0):.2f})\n"
-        f"- Injury pattern: {ctx.get('injury_pattern', 'N/A')}\n"
+        f"- Injury pattern: {injury_pat}\n"
         f"- Organs involved: {organs}\n"
-        f"- Bleeding: {ctx.get('bleeding_description', 'N/A')}\n"
+        f"- Bleeding: {bleeding}\n"
         f"- Severity: {ctx.get('severity_estimate', 'N/A')}\n"
         f"- Hemorrhage volume: {ctx.get('volume_ml', 0):.1f} mL ({shock_class})\n"
         f"- Risk tier: {ctx.get('risk_level', 'N/A')}\n"
         f"- Patient vitals: {vitals_str}\n"
         f"- Differentials: {differentials}\n"
         f"- EAST recommendation: {east_rec}\n\n"
-        "REPORT FORMAT — include ALL sections in this exact order (write each heading in ALL CAPS):\n"
-        "FINDINGS — injury pattern, organs, bleeding extent.\n"
-        "AAST GRADING — estimate AAST organ injury grade (I-V) only for organs actually involved.\n"
-        "IMPRESSION — severity + volume + risk tier (2-3 sentences).\n"
-        "EAST RECOMMENDATION — copy verbatim from data above.\n"
-        "LABS & IMAGING — CBC, BMP, coagulation panel, type & screen; add LFTs if hepatic, lipase if pancreatic. Include imaging follow-up timing.\n\n"
-        "Begin your response immediately with: CLINICAL INDICATION"
+        "Write the report with ALL these sections in order, each heading in ALL CAPS on its own line:\n"
+        "CLINICAL INDICATION\n"
+        "FINDINGS\n"
+        "AAST GRADING (detail each involved organ with grade I-V and brief rationale)\n"
+        "IMPRESSION\n"
+        "EAST RECOMMENDATION\n"
+        "LABS & IMAGING\n\n"
+        f"CLINICAL INDICATION\n{indication}\n"
     )
 
 # ── Layer 5 — Q&A ───────────────────────────────────────────────────────────

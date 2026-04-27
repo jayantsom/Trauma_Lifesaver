@@ -87,15 +87,12 @@ class CTVisualAnalyzer:
             content.append({"type": "image", "image": img.convert("RGB")})
             content.append({"type": "text", "text": f"[CT Slice {i + 1} of {len(slices)}]"})
 
-        context_parts = []
-        if patient_info:
-            if patient_info.get("age"):   context_parts.append(f"Age {patient_info['age']} years")
-            if patient_info.get("state"): context_parts.append(f"Clinical state: {patient_info['state']}")
+        # Only include vitals (not age/state) to keep the prompt focused on imaging
+        vitals_text = ""
         if vitals:
             parts = [f"{k.upper()} {v}" for k, v in vitals.items() if v]
-            if parts: context_parts.append(f"Vitals: {', '.join(parts)}")
-
-        vitals_text = ("\nPatient context: " + "; ".join(context_parts) + ".") if context_parts else ""
+            if parts:
+                vitals_text = f"\nPatient vitals: {', '.join(parts)}."
 
         content.append({"type": "text", "text": config.visual_analysis_prompt(len(slices), vitals_text)})
         return content

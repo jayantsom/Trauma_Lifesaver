@@ -60,8 +60,9 @@ def upload():
     }
     vitals = {k: v for k, v in vitals.items() if v}
     patient_info = {
-        "age":   request.form.get("age"),
-        "state": request.form.get("clinical_state"),
+        "age":           request.form.get("age"),
+        "state":         request.form.get("clinical_state"),
+        "clinical_notes": request.form.get("clinical_notes"),
     }
     patient_info = {k: v for k, v in patient_info.items() if v}
     patient_id = request.form.get("patient_id") or f"PT-{uuid.uuid4().hex[:6].upper()}"
