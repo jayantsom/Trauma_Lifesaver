@@ -215,17 +215,46 @@ document.addEventListener('DOMContentLoaded', () => {
         if (el.vitGCS.value.trim()) formData.append('gcs', el.vitGCS.value.trim());
 
         try {
+            // Step 1: submit job — returns immediately with job_id
             const resp = await fetch('/upload', { method: 'POST', body: formData });
-            const data = await resp.json();
-            stopLoadingSteps();
-            el.loadingOverlay.classList.remove('active');
-            if (data.success) renderResults(data.result);
-            else throw new Error(data.error || 'Unknown error occurred');
+            const init = await resp.json();
+            if (!init.job_id) throw new Error(init.error || 'Failed to start analysis');
+
+            // Step 2: poll /status/<job_id> every 2s
+            await pollJob(init.job_id);
         } catch (err) {
             stopLoadingSteps();
             el.loadingOverlay.classList.remove('active');
             showError(`Analysis failed: ${err.message}`);
         }
+    }
+
+    async function pollJob(jobId) {
+        return new Promise((resolve, reject) => {
+            const poll = async () => {
+                try {
+                    const resp = await fetch(`/status/${jobId}`);
+                    const data = await resp.json();
+                    if (data.status === 'done') {
+                        stopLoadingSteps();
+                        el.loadingOverlay.classList.remove('active');
+                        renderResults(data.result);
+                        resolve();
+                    } else if (data.status === 'error') {
+                        stopLoadingSteps();
+                        el.loadingOverlay.classList.remove('active');
+                        reject(new Error(data.error || 'Pipeline error'));
+                    } else {
+                        setTimeout(poll, 2000); // still processing — poll again
+                    }
+                } catch (err) {
+                    stopLoadingSteps();
+                    el.loadingOverlay.classList.remove('active');
+                    reject(err);
+                }
+            };
+            poll();
+        });
     }
 
     // ── Render results ─────────────────────────────────────────────────

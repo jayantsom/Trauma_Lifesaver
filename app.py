@@ -32,6 +32,19 @@ def load_models():
 def index():
     return render_template("index.html")
 
+import threading
+import time as _time
+
+# In-memory job store: job_id -> {status, result, error, ts}
+_jobs: dict = {}
+_JOBS_TTL = 1800  # 30 min
+
+def _cleanup_jobs():
+    cutoff = _time.time() - _JOBS_TTL
+    stale = [jid for jid, j in _jobs.items() if j.get("ts", 0) < cutoff]
+    for jid in stale:
+        del _jobs[jid]
+
 @app.route("/upload", methods=["POST"])
 def upload():
     if pipeline is None: return jsonify({"success": False, "error": "Models not loaded yet."}), 503
@@ -53,28 +66,46 @@ def upload():
     if not image_paths:
         return jsonify({"success": False, "error": "No valid image files found."}), 400
 
-    vitals = {
-        "hr": request.form.get("hr"),
-        "bp": request.form.get("bp"),
-        "gcs": request.form.get("gcs"),
-    }
+    vitals = {k: request.form.get(k) for k in ("hr", "bp", "gcs")}
     vitals = {k: v for k, v in vitals.items() if v}
     patient_info = {
-        "age":           request.form.get("age"),
-        "state":         request.form.get("clinical_state"),
+        "age":            request.form.get("age"),
+        "state":          request.form.get("clinical_state"),
         "clinical_notes": request.form.get("clinical_notes"),
     }
     patient_info = {k: v for k, v in patient_info.items() if v}
     patient_id = request.form.get("patient_id") or f"PT-{uuid.uuid4().hex[:6].upper()}"
 
-    try:
-        result = pipeline.run_pipeline(image_paths, vitals, patient_id, patient_info)
-        return jsonify({"success": True, "result": result})
-    except torch.cuda.OutOfMemoryError:
-        torch.cuda.empty_cache()
-        return jsonify({"success": False, "error": "GPU out of memory."}), 500
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+    job_id = str(uuid.uuid4())
+    _jobs[job_id] = {"status": "processing", "ts": _time.time()}
+
+    def _run():
+        try:
+            result = pipeline.run_pipeline(image_paths, vitals, patient_id, patient_info)
+            _jobs[job_id] = {"status": "done", "result": result, "ts": _time.time()}
+        except torch.cuda.OutOfMemoryError:
+            torch.cuda.empty_cache()
+            _jobs[job_id] = {"status": "error", "error": "GPU out of memory.", "ts": _time.time()}
+        except Exception as e:
+            import traceback; print(traceback.format_exc())
+            _jobs[job_id] = {"status": "error", "error": str(e), "ts": _time.time()}
+        finally:
+            _cleanup_jobs()
+
+    threading.Thread(target=_run, daemon=True).start()
+    return jsonify({"job_id": job_id, "status": "processing"})
+
+@app.route("/status/<job_id>")
+def job_status(job_id):
+    job = _jobs.get(job_id)
+    if not job:
+        return jsonify({"status": "error", "error": "Job not found or expired."}), 404
+    if job["status"] == "done":
+        return jsonify({"status": "done", "success": True, "result": job["result"]})
+    if job["status"] == "error":
+        return jsonify({"status": "error", "success": False, "error": job["error"]})
+    return jsonify({"status": "processing"})
+
 
 @app.route("/qa-stream")
 def qa_stream():
