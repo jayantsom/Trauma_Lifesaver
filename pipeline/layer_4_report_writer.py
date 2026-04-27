@@ -214,7 +214,9 @@ class ClinicalReportWriter:
                     repetition_penalty=1.3,
                 )
             raw = self.va.processor.decode(out[0][input_len:], skip_special_tokens=True).strip()
-            raw = re.sub(r'<unused\d+>[\s\S]*?<unused\d+>', '', raw).strip()
+            # Two-pass thinking strip: paired tags first, then any remaining unpaired opening tag
+            raw = re.sub(r'<unused\d+>[\s\S]*?<unused\d+>', '', raw)
+            raw = re.sub(r'<unused\d+>[\s\S]*', '', raw).strip()
             raw = _deloop(raw)
             print(f"[Layer 4] Gemma raw:\n{raw[:500]}")
             return self._parse_gemma_sections(raw)

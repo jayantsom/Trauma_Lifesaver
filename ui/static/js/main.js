@@ -436,14 +436,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 el.qaSubmit.disabled = false;
                 el.typingIndicator.classList.add('hidden');
                 qaStreaming = false;
-                // Strip MedGemma thinking tokens
-                aiRawText = aiRawText.replace(/<unused\d+>[\s\S]*?<unused\d+>/g, '').trim();
-                // Truncate anything after Next Steps section to prevent runaway text
-                const nextStepsMatch = aiRawText.match(/\*\*Next Steps?\*\*[^\n]*\n([^\n]*)/i);
-                if (nextStepsMatch) {
-                    const cutIdx = aiRawText.indexOf(nextStepsMatch[0]) + nextStepsMatch[0].length + nextStepsMatch[1].length;
-                    aiRawText = aiRawText.slice(0, cutIdx).trim();
-                }
+                // Two-pass thinking strip: paired tags, then any remaining unpaired opening tag
+                aiRawText = aiRawText.replace(/<unused\d+>[\s\S]*?<unused\d+>/g, '');
+                aiRawText = aiRawText.replace(/<unused\d+>[\s\S]*/g, '').trim();
                 aiTextEl.innerHTML = renderMarkdown(aiRawText);
                 scrollChat();
                 return;

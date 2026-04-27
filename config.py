@@ -1,4 +1,5 @@
 import os
+import re
 
 # ── Models ─────────────────────────────────────────────────────────────────
 MEDSIGLIP_MODEL_ID = "google/medsiglip-448"
@@ -102,21 +103,27 @@ def report_synthesis_prompt(ctx: dict, east_rec: str, shock_class: str, vitals_s
 
 
 # ── Layer 5 — Q&A ───────────────────────────────────────────────────────────
-QA_MAX_TOKENS = 200
+QA_MAX_TOKENS = 400
 
 def qa_context_summary(ctx: dict) -> str:
     bleeding = ctx.get("bleeding_description", "N/A")
     if len(bleeding) > 150 or "FINDINGS" in bleeding.upper() or "IMPRESSION" in bleeding.upper():
         bleeding = "See initial analysis"
+
+    injury = ctx.get("injury_pattern", "N/A")
+    # Strip report-header prefixes that Layer 2 fallback text sometimes includes
+    injury = re.sub(r'^(FINDINGS|IMPRESSION|ASSESSMENT)[:\s]*', '', injury, flags=re.IGNORECASE).strip()
+    if len(injury) > 200:
+        injury = injury[:200] + "..."
+
     return (
-        f"Prior automated analysis of this volume:\n"
-        f"- Injury pattern: {ctx.get('injury_pattern', 'N/A')}\n"
+        f"Patient scan summary:\n"
+        f"- Injury pattern: {injury}\n"
         f"- Organs involved: {', '.join(ctx.get('organs_involved', [])) or 'None identified'}\n"
         f"- Bleeding: {bleeding}\n"
         f"- Severity: {ctx.get('severity_estimate', 'N/A')}\n"
         f"- Hemorrhage volume: {ctx.get('volume_ml', 0):.1f} mL\n"
         f"- Risk level: {ctx.get('risk_level', 'N/A')}\n"
-        f"- Differential: {', '.join(ctx.get('differential_diagnosis', [])) or 'N/A'}\n"
     )
 
 # ── EAST Guidelines ─────────────────────────────────────────────────────────
