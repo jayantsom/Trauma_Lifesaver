@@ -20,12 +20,13 @@ class QAStreamer:
 
         content.append({"type": "text", "text": (
             f"{context_summary}\n"
-            f"You are a trauma radiologist. Answer the clinical question below using the CT data and analysis.\n"
-            f"Fill in the 3 labeled sections. Each has a strict limit. Stop after NEXT STEPS.\n\n"
+            "You are a trauma radiologist giving a brief clinical answer.\n"
+            "Rules: (1) Max 2 sentences per section. (2) No disclaimers or hedging. "
+            "(3) No 'I cannot' or 'consult a physician'. (4) Stop immediately after Next Steps.\n\n"
             f"Question: {question}\n\n"
-            f"**Answer** (2-3 sentences — direct answer to the question):\n\n"
-            f"**Clinical Reasoning** (2 bullet points starting with •):\n\n"
-            f"**Next Steps** (1-2 lines — immediate clinical action):\n"
+            "**Answer** (1-2 sentences, direct clinical answer):\n\n"
+            "**Reasoning** (2 bullet points starting with •, specific to this case):\n\n"
+            "**Next Steps** (1 sentence, specific action):\n"
         )})
 
         messages = [{"role": "user", "content": content}]
