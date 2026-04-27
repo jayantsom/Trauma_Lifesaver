@@ -343,10 +343,11 @@ document.addEventListener('DOMContentLoaded', () => {
         el.llmReport.innerHTML = rawReport
             .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
             .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-            .replace(/^(CLINICAL INDICATION|FINDINGS|AAST GRADING|IMPRESSION|EAST RECOMMENDATION|LABS & IMAGING|LABS & FOLLOW-UP)(.*?)$/gm,
+            .replace(/^(CLINICAL INDICATION|FINDINGS|AAST GRADING|IMPRESSION|PHYSICIAN ACTIONS|EAST RECOMMENDATION|LABS \& IMAGING|LABS \& FOLLOW-UP)(.*?)$/gm,
                 '<h2>$1$2</h2>')
+            .replace(/^• (.+)$/gm, '<li class="physician-action">$1</li>')
             .replace(/^- (.+)$/gm, '<li>$1</li>')
-            .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+            .replace(/(<li.*<\/li>)/s, '<ul>$1</ul>')
             .replace(/\n\n/g, '<br><br>')
             .replace(/\n/g, '<br>');
 
@@ -398,6 +399,7 @@ document.addEventListener('DOMContentLoaded', () => {
             .replace(/\*(.+?)\*/g, '<em>$1</em>')
             .replace(/^#{3}\s+(.+)$/gm, '<strong>$1</strong>')
             .replace(/^#{1,2}\s+(.+)$/gm, '<strong style="font-size:1em">$1</strong>')
+            .replace(/^[•]\s*(.+)$/gm, '<li>$1</li>')
             .replace(/^[-*]\s+(.+)$/gm, '<li>$1</li>')
             .replace(/(<li>[\s\S]*?<\/li>)/g, '<ul>$1</ul>')
             .replace(/\n\n/g, '<br><br>')
@@ -434,7 +436,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 el.qaSubmit.disabled = false;
                 el.typingIndicator.classList.add('hidden');
                 qaStreaming = false;
-                // Render full markdown now that stream is complete
+                // Strip MedGemma thinking tokens then render markdown
+                aiRawText = aiRawText.replace(/<unused\d+>[\s\S]*?<unused\d+>/g, '').trim();
                 aiTextEl.innerHTML = renderMarkdown(aiRawText);
                 scrollChat();
                 return;

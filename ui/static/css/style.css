@@ -1285,19 +1285,29 @@ body.light-mode .input-select option { background: #f0fdf4; color: #052e16; }
     background: rgba(248, 113, 113, 0.06);
     border: 1px solid rgba(248, 113, 113, 0.20);
     border-radius: var(--radius-md);
-    color: var(--text-muted);
-    font-size: 0.75rem;
-    line-height: 1.6;
     display: flex;
-    gap: 10px;
-    align-items: flex-start;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 4px;
 }
 
-.disclaimer i {
+.disclaimer-title {
+    font-size: 0.82rem;
+    font-weight: 700;
     color: var(--risk-high);
-    flex-shrink: 0;
-    margin-top: 2px;
+    margin: 0;
 }
 
-.disclaimer strong { color: var(--risk-high); }
+.disclaimer-title i {
+    margin-right: 6px;
+}
+
+.disclaimer-body {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin: 0;
+}
+
 

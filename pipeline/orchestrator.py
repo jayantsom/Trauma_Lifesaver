@@ -40,6 +40,15 @@ class TraumaPipeline:
         triage_summary = self.triager.summarize_triage(all_triage)
 
         # Layer 2 — top suspicious slices only (capped to avoid OOM)
+        # Also extract the top triage label for report context
+        top_triage_label = ""
+        for r in all_triage:
+            if r["suspicious"]:
+                top_triage_label = r.get("top_label", "")
+                break
+        if not top_triage_label and all_triage:
+            top_triage_label = all_triage[0].get("top_label", "")
+
         try:
             visual_findings = self.visual_analyzer.run_visual_analysis(
                 suspicious_images, vitals
@@ -72,6 +81,7 @@ class TraumaPipeline:
             "vitals": vitals or {},
             "patient_info": patient_info or {},
             "clinical_notes": (patient_info or {}).get("clinical_notes", ""),
+            "top_triage_label": top_triage_label,
             "triage_summary": triage_summary,
             "patient_id": patient_id,
         }
