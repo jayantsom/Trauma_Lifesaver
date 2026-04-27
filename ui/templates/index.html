@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trauma Lifesaver · AI Trauma Analysis</title>
+    <title>Trauma Lifesaver · AI-Powered CT Analysis</title>
+    <meta name="description" content="AI-powered abdominal CT triage and hemorrhage analysis using MedGemma and MedSigLIP.">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,29 +12,47 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-<body class="dark-mode">
+<body>
 
     <!-- Theme Toggle -->
-    <button id="themeToggle" class="theme-toggle" aria-label="Toggle light/dark mode">
+    <button id="themeToggle" class="theme-toggle" title="Toggle light/dark mode">
         <i class="fas fa-sun light-icon"></i>
         <i class="fas fa-moon dark-icon"></i>
     </button>
 
+    <!-- LOADING OVERLAY -->
     <div class="loading-overlay" id="loadingOverlay">
         <div class="loading-card">
             <div class="loader-ring"></div>
             <p class="loading-title">Analyzing Scan Series</p>
             <div class="loading-steps">
-                <div class="step" id="step1"><span class="step-dot"></span>Preprocessing CT slices</div>
-                <div class="step" id="step2"><span class="step-dot"></span>MedSigLIP-448 triage scoring</div>
-                <div class="step" id="step3"><span class="step-dot"></span>U-Net hemorrhage segmentation</div>
-                <div class="step" id="step4"><span class="step-dot"></span>MedGemma 1.5 clinical reasoning</div>
-                <div class="step" id="step5"><span class="step-dot"></span>Generating structured report</div>
+                <div class="step" id="step1">
+                    <span class="step-icon pending"><i class="fas fa-circle"></i></span>
+                    <span class="step-text">Preprocessing CT slices</span>
+                </div>
+                <div class="step" id="step2">
+                    <span class="step-icon pending"><i class="fas fa-circle"></i></span>
+                    <span class="step-text">MedSigLIP-448 zero-shot triage scoring</span>
+                </div>
+                <div class="step" id="step3">
+                    <span class="step-icon pending"><i class="fas fa-circle"></i></span>
+                    <span class="step-text">U-Net hemorrhage segmentation &amp; quantification</span>
+                </div>
+                <div class="step" id="step4">
+                    <span class="step-icon pending"><i class="fas fa-circle"></i></span>
+                    <span class="step-text">MedGemma 1.5 multimodal clinical reasoning</span>
+                </div>
+                <div class="step" id="step5">
+                    <span class="step-icon pending"><i class="fas fa-circle"></i></span>
+                    <span class="step-text">Generating EAST-aligned structured report</span>
+                </div>
             </div>
         </div>
     </div>
 
     <div class="container">
+
+        <!-- HEADER -->
         <header class="site-header">
             <div class="header-left">
                 <div class="header-logo">
@@ -46,17 +65,20 @@
                 <span class="chip">MedSigLIP-448</span>
                 <span class="chip">MedGemma 1.5 4B</span>
                 <span class="chip">U-Net Seg</span>
-                <span class="chip">EAST</span>
+                <span class="chip">EAST Guidelines</span>
             </div>
         </header>
 
+        <!-- ERROR BANNER -->
         <div class="error-banner hidden" id="errorBanner">
             <i class="fas fa-triangle-exclamation"></i>
             <span id="errorMessage">An error occurred.</span>
             <button class="error-dismiss" id="errorDismiss">×</button>
         </div>
 
+        <!-- UPLOAD SECTION -->
         <section class="upload-section glass-card" id="uploadZone">
+
             <div class="upload-zone" id="dropTarget">
                 <div class="upload-glow"></div>
                 <div class="upload-body">
@@ -73,9 +95,43 @@
                     </div>
                 </div>
             </div>
+
             <div class="ct-preview hidden" id="ctThumbnails"></div>
             <div class="file-validation hidden" id="fileValidation"></div>
-            
+
+            <!-- Patient Metadata -->
+            <div class="meta-row">
+                <span class="section-label"><i class="fas fa-id-card"></i> Patient Information <span class="optional">— optional</span></span>
+                <div class="meta-inputs">
+                    <div class="meta-field">
+                        <label for="metaPatientId">Patient ID</label>
+                        <div class="input-wrap">
+                            <input type="text" id="metaPatientId" class="input-field" placeholder="PT-001">
+                        </div>
+                    </div>
+                    <div class="meta-field">
+                        <label for="metaAge">Age</label>
+                        <div class="input-wrap">
+                            <input type="number" id="metaAge" class="input-field" placeholder="45">
+                            <span class="input-unit">yrs</span>
+                        </div>
+                    </div>
+                    <div class="meta-field">
+                        <label for="metaState">Clinical State</label>
+                        <div class="input-wrap">
+                            <select id="metaState" class="input-field input-select">
+                                <option value="">Select state</option>
+                                <option value="Emergency">Emergency</option>
+                                <option value="Trauma Care">Trauma Care</option>
+                                <option value="Critical Care">Critical Care</option>
+                                <option value="Observation">Observation</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Vitals -->
             <div class="vitals-row">
                 <span class="section-label"><i class="fas fa-stethoscope"></i> Patient Vitals <span class="optional">— optional</span></span>
                 <div class="vitals-inputs">
@@ -102,6 +158,7 @@
                     </div>
                 </div>
             </div>
+
             <div class="analyze-row">
                 <button class="btn-analyze" id="analyzeBtn" disabled>
                     <i class="fas fa-microscope"></i>
@@ -109,17 +166,24 @@
                 </button>
                 <span class="analyze-hint" id="analyzeHint">Select CT slices to begin</span>
             </div>
+
         </section>
 
+        <!-- RESULTS -->
         <div class="results-container hidden" id="resultsContainer">
+
             <div class="results-topbar">
                 <div class="results-meta">
                     <span class="results-label">Analysis Report</span>
                     <span id="patientIdDisplay" class="patient-id"></span>
+                    <div class="patient-meta-chips" id="patientMetaChips"></div>
                 </div>
-                <button id="resetBtn" class="btn-ghost"><i class="fas fa-arrow-left"></i> New Case</button>
+                <button id="resetBtn" class="btn-ghost">
+                    <i class="fas fa-arrow-left"></i> New Patient
+                </button>
             </div>
 
+            <!-- RISK BANNER -->
             <div class="risk-banner unknown" id="riskBanner">
                 <div class="risk-left">
                     <div class="risk-indicator">
@@ -130,7 +194,7 @@
                 </div>
                 <div class="risk-right">
                     <div class="risk-stat">
-                        <span class="risk-stat-label">Hemorrhage</span>
+                        <span class="risk-stat-label">Hemorrhage Volume</span>
                         <span class="risk-stat-val" id="riskVolume">-- mL</span>
                     </div>
                     <div class="risk-divider"></div>
@@ -141,18 +205,30 @@
                 </div>
             </div>
 
+            <!-- RESULTS GRID -->
             <div class="results-grid">
+
+                <!-- LEFT COLUMN -->
                 <div class="col-left">
+
                     <div class="panel glass-card">
-                        <div class="panel-header"><span><i class="fas fa-images"></i> CT Slices</span></div>
+                        <div class="panel-header">
+                            <span><i class="fas fa-images"></i> CT Slices</span>
+                        </div>
                         <div class="ct-results-strip" id="ctResultsStrip"></div>
                     </div>
+
                     <div class="panel glass-card">
-                        <div class="panel-header"><span><i class="fas fa-chart-bar"></i> Triage Scores</span></div>
+                        <div class="panel-header">
+                            <span><i class="fas fa-chart-bar"></i> Triage Scores</span>
+                        </div>
                         <div id="triageRows"></div>
                     </div>
+
                     <div class="panel glass-card">
-                        <div class="panel-header"><span><i class="fas fa-calculator"></i> Quantification</span></div>
+                        <div class="panel-header">
+                            <span><i class="fas fa-calculator"></i> Quantification</span>
+                        </div>
                         <div class="data-row">
                             <span class="data-label">Hemorrhage Vol</span>
                             <span class="data-value text-danger" id="volume">--</span>
@@ -162,26 +238,38 @@
                             <span class="data-value text-muted" id="pixels">--</span>
                         </div>
                     </div>
+
                     <div class="panel glass-card">
-                        <div class="panel-header"><span><i class="fas fa-eye"></i> Visual Findings</span></div>
+                        <div class="panel-header">
+                            <span><i class="fas fa-eye"></i> Visual Findings</span>
+                        </div>
                         <div class="data-row"><span class="data-label">Severity</span><span class="data-value" id="severity">--</span></div>
                         <div class="data-row"><span class="data-label">Organs</span><span class="data-value" id="organs">--</span></div>
                         <div class="data-row"><span class="data-label">Pattern</span><span class="data-value" id="injuryPattern">--</span></div>
                     </div>
+
                     <div class="panel glass-card">
-                        <div class="panel-header"><span><i class="fas fa-list-check"></i> Differential Dx</span></div>
+                        <div class="panel-header">
+                            <span><i class="fas fa-list-check"></i> Differential Dx</span>
+                        </div>
                         <ul id="diffList" class="diff-list"></ul>
                     </div>
+
                 </div>
 
+                <!-- RIGHT COLUMN -->
                 <div class="col-right">
+
                     <div class="panel glass-card report-panel">
                         <div class="panel-header">
                             <span><i class="fas fa-file-medical"></i> Formal Clinical Report</span>
-                            <button class="btn-copy" id="copyReportBtn"><i class="fas fa-copy"></i> Copy</button>
+                            <button class="btn-copy" id="copyReportBtn">
+                                <i class="fas fa-copy"></i> Copy
+                            </button>
                         </div>
                         <div class="report-content" id="llmReport">--</div>
                     </div>
+
                     <div class="panel glass-card chat-panel">
                         <div class="panel-header">
                             <span><i class="fas fa-comment-medical"></i> Clinical Q&amp;A</span>
@@ -201,12 +289,16 @@
                         </div>
                         <div class="chat-input-area">
                             <input type="text" id="qaInput" class="chat-input" placeholder="Ask a clinical follow-up question…">
-                            <button id="qaSubmit" class="btn-send"><i class="fas fa-paper-plane"></i></button>
+                            <button id="qaSubmit" class="btn-send">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
                         </div>
                     </div>
+
                 </div>
             </div>
         </div>
+
     </div>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
