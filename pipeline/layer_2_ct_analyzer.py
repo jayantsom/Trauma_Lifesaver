@@ -98,32 +98,36 @@ class CTVisualAnalyzer:
         return content
 
     def _parse_findings(self, raw: str) -> dict:
+        import re
+        # Strip MedGemma thinking tokens before any parsing
+        clean = re.sub(r'<unused\d+>[\s\S]*?<unused\d+>', '', raw).strip()
+
         try:
-            parsed = json.loads(raw.strip())
+            parsed = json.loads(clean.strip())
             if isinstance(parsed, dict):
                 self._fill_defaults(parsed, raw)
                 return parsed
         except json.JSONDecodeError:
             pass
 
-        start = raw.find('{')
+        start = clean.find('{')
         if start != -1:
             depth = 0
-            for i, ch in enumerate(raw[start:], start):
+            for i, ch in enumerate(clean[start:], start):
                 if ch == '{': depth += 1
                 elif ch == '}':
                     depth -= 1
                     if depth == 0:
                         try:
-                            parsed = json.loads(raw[start:i + 1])
+                            parsed = json.loads(clean[start:i + 1])
                             if isinstance(parsed, dict):
                                 self._fill_defaults(parsed, raw)
                                 return parsed
                         except json.JSONDecodeError:
                             break
 
-        # Aggressive text extraction fallback when JSON completely fails
-        raw_lower = raw.lower()
+        # Text extraction fallback — use cleaned text
+        raw_lower = clean.lower()
 
         severity = "unknown"
         if any(w in raw_lower for w in ["no acute", "no injury", "unremarkable", "normal"]): severity = "none"
@@ -131,27 +135,24 @@ class CTVisualAnalyzer:
         elif "moderate" in raw_lower: severity = "moderate"
         elif "mild" in raw_lower: severity = "mild"
 
-        # Extract injury pattern from first non-empty line
-        import re
-        injury_pattern = "Unable to determine from image"
-        for line in raw.strip().split("\n"):
+        # First meaningful sentence as injury pattern
+        injury_pattern = "Unable to determine"
+        for line in clean.strip().split("\n"):
             line = line.strip().lstrip('{"').strip()
-            if len(line) > 20 and not line.startswith(("{", "}", "[", "You", "CT", "Slice")):
+            if len(line) > 20 and not line.startswith(("{", "}", "[", "You", "CT", "Slice", "CRITICAL")):
                 injury_pattern = line[:200].rstrip(',": ')
                 break
 
-        # Extract organs mentioned
         organ_keywords = ["liver", "spleen", "kidney", "bowel", "mesentery", "bladder",
                           "pancreas", "aorta", "stomach", "lung", "colon", "rectum"]
         organs = [o.capitalize() for o in organ_keywords if o in raw_lower]
 
-        # Extract bleeding
         bleeding = "Not identified"
         for pat in [r'bleeding[:\s]+([^.\n]+)', r'hemorrhage[:\s]+([^.\n]+)',
                     r'hemoperitoneum[:\s]+([^.\n]+)', r'free fluid[:\s]+([^.\n]+)']:
             m = re.search(pat, raw_lower)
             if m:
-                bleeding = raw[m.start(1):m.start(1)+150].strip()
+                bleeding = clean[m.start(1):m.start(1)+150].strip()
                 break
 
         return {

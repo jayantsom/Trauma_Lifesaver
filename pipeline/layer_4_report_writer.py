@@ -44,7 +44,7 @@ class ClinicalReportWriter:
         def _generate():
             return self.va.model.generate(
                 **inputs,
-                max_new_tokens=700,   # reduced from 1024 for speed
+                max_new_tokens=800,
                 do_sample=False,
             )
 
@@ -59,18 +59,49 @@ class ClinicalReportWriter:
             torch.cuda.empty_cache()
             raise RuntimeError("GPU OOM during report synthesis — falling back to template.")
 
-        report = self.va.processor.decode(output[0][input_len:], skip_special_tokens=True).strip()
+        report_raw = self.va.processor.decode(output[0][input_len:], skip_special_tokens=True).strip()
 
         import re
-        # Strip MedGemma thinking tokens: <unused94>...<unused95>
-        report = re.sub(r'<unused\d+>[\s\S]*?<unused\d+>', '', report).strip()
+        # Strip MedGemma thinking tokens
+        report_raw = re.sub(r'<unused\d+>[\s\S]*?<unused\d+>', '', report_raw).strip()
 
-        # Find CLINICAL INDICATION anywhere in the output (no ^ anchor — thinking tag may precede it)
-        m = re.search(r'CLINICAL INDICATION', report, re.IGNORECASE)
-        if m:
-            report = report[m.start():].strip()
-        else:
-            report = "CLINICAL INDICATION\n" + report
+        # The prompt pre-built CLINICAL INDICATION + FINDINGS and asked Gemma to start at AAST GRADING.
+        # Reconstruct: prepend the pre-built block, then append Gemma's continuation.
+        indication = ctx.get("clinical_notes") or "Abdominal CT angiogram for trauma evaluation."
+
+        # Re-derive the findings text (same logic as prompt builder)
+        triage    = ctx.get("triage_summary", {})
+        organs_l  = ctx.get("organs_involved", [])
+        volume    = ctx.get("volume_ml", 0)
+        risk      = ctx.get("risk_level", "LOW")
+        severity  = ctx.get("severity_estimate", "unknown")
+        injury_p  = ctx.get("injury_pattern", "")
+        bleeding  = ctx.get("bleeding_description", "")
+        sus       = triage.get("suspicious_count", "?")
+        total     = triage.get("total_slices", "?")
+        max_sc    = triage.get("max_score", 0)
+
+        fp = [f"MedSigLIP triage identified {sus}/{total} slices suspicious (max score {max_sc:.2f}/1.00)."]
+        if injury_p and "Unable" not in injury_p and "raw response" not in injury_p:
+            fp.append(f"Automated visual analysis: {injury_p}.")
+        if organs_l:
+            fp.append(f"Organs with potential involvement: {', '.join(organs_l)}.")
+        if bleeding and "Not identified" not in bleeding:
+            fp.append(f"Hemorrhage characterization: {bleeding}.")
+        fp.append(f"Quantitative hemorrhage volume: {volume:.1f} mL ({shock_class}) — {risk} risk tier.")
+        if severity not in ("unknown", "none", ""):
+            fp.append(f"Overall injury severity: {severity}.")
+        findings_text = " ".join(fp)
+
+        # Find where Gemma's AAST GRADING output starts (strip any accidental preamble)
+        m = re.search(r'AAST GRADING', report_raw, re.IGNORECASE)
+        gemma_body = report_raw[m.start():].strip() if m else report_raw.strip()
+
+        report = (
+            f"CLINICAL INDICATION\n{indication}\n\n"
+            f"FINDINGS\n{findings_text}\n\n"
+            f"{gemma_body}"
+        )
 
         return report
 
