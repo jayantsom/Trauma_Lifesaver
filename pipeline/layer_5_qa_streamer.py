@@ -40,6 +40,13 @@ class QAStreamer:
         self.va = visual_analyzer
 
     def stream_qa_response(self, question: str, context: dict, pil_images: list):
+        if not hasattr(self.va, "processor") or not hasattr(self.va, "model"):
+            yield (
+                "Clinical Q&A is running in CPU-safe mode, so MedGemma is not loaded. "
+                "The available report is based on triage, quantification, and deterministic clinical templates."
+            )
+            return
+
         slices = pil_images[: self.va.max_qa_slices]
         context_summary = config.qa_context_summary(context)
 

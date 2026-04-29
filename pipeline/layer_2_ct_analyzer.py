@@ -1,6 +1,5 @@
 import json
 import torch
-import threading
 from transformers import AutoProcessor, AutoModelForImageTextToText, BitsAndBytesConfig
 import config
 
@@ -12,6 +11,12 @@ class CTVisualAnalyzer:
     def __init__(self, device="auto", use_4bit=True, hf_token=None, lora_adapter=None):
         token = hf_token or config.HF_TOKEN
         cuda_available = torch.cuda.is_available()
+        cpu_dtype = {
+            "bfloat16": torch.bfloat16,
+            "float16": torch.float16,
+            "float32": torch.float32,
+        }.get(config.MEDGEMMA_CPU_DTYPE, torch.bfloat16)
+        dtype = torch.bfloat16 if cuda_available else cpu_dtype
 
         bnb_config = None
         if use_4bit and cuda_available:
@@ -23,16 +28,23 @@ class CTVisualAnalyzer:
             )
             print(f"[Layer 2 - CTVisualAnalyzer] Loading {self.MODEL_ID} with 4-bit NF4...")
         else:
-            print(f"[Layer 2 - CTVisualAnalyzer] Loading {self.MODEL_ID} without quantization...")
+            dtype_name = str(dtype).replace("torch.", "")
+            print(f"[Layer 2 - CTVisualAnalyzer] Loading {self.MODEL_ID} without quantization ({dtype_name})...")
 
         self.model = AutoModelForImageTextToText.from_pretrained(
             self.MODEL_ID,
-            dtype=torch.bfloat16 if cuda_available else torch.float32,
+            dtype=dtype,
             device_map=device if cuda_available else "cpu",
             quantization_config=bnb_config,
             token=token,
+            local_files_only=config.MEDGEMMA_LOCAL_FILES_ONLY,
+            low_cpu_mem_usage=True,
         )
-        self.processor = AutoProcessor.from_pretrained(self.MODEL_ID, token=token)
+        self.processor = AutoProcessor.from_pretrained(
+            self.MODEL_ID,
+            token=token,
+            local_files_only=config.MEDGEMMA_LOCAL_FILES_ONLY,
+        )
 
         self.lora_adapter = lora_adapter or config.LORA_ADAPTER
         if self.lora_adapter:
@@ -175,3 +187,19 @@ class CTVisualAnalyzer:
         parsed.setdefault("severity_estimate", "unknown")
         parsed.setdefault("differential_diagnosis", [])
         parsed["raw_response"] = raw
+
+
+class CPUFallbackVisualAnalyzer:
+    """CPU-safe stand-in used when MedGemma is too large for local RAM."""
+
+    max_qa_slices = 1
+
+    def run_visual_analysis(self, pil_images: list, vitals: dict = None, patient_info: dict = None) -> dict:
+        return {
+            "injury_pattern": "MedGemma visual analysis skipped in CPU-safe mode.",
+            "organs_involved": [],
+            "bleeding_description": "Not identified by visual language model.",
+            "severity_estimate": "unknown",
+            "differential_diagnosis": [],
+            "raw_response": "CPU-safe mode: MedGemma was not loaded.",
+        }

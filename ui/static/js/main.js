@@ -51,6 +51,8 @@ document.addEventListener('DOMContentLoaded', () => {
         injuryPattern:      document.getElementById('injuryPattern'),
         diffList:           document.getElementById('diffList'),
         llmReport:          document.getElementById('llmReport'),
+        enhancedReport:     document.getElementById('enhancedReport'),
+        pubmedCitations:    document.getElementById('pubmedCitations'),
         copyReportBtn:      document.getElementById('copyReportBtn'),
         chatHistory:        document.getElementById('chatHistory'),
         typingIndicator:    document.getElementById('typingIndicator'),
@@ -160,7 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function hideValidation() { el.fileValidation.classList.add('hidden'); }
 
     // ── Loading steps ──────────────────────────────────────────────────
-    const STEP_IDS = ['step1','step2','step3','step4','step5'];
+    const STEP_IDS = ['step1','step2','step3','step4','step5','step6'];
     let stepTimer = null, currentStep = 0;
 
     function setStepState(id, state) {
@@ -190,6 +192,35 @@ document.addEventListener('DOMContentLoaded', () => {
     function stopLoadingSteps() {
         clearInterval(stepTimer);
         STEP_IDS.forEach(id => setStepState(id, 'done'));
+    }
+
+    function renderReportHtml(text) {
+        return text
+            .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/^(ENHANCED CLINICAL EXPLANATION REPORT|AGENTIC CLINICAL EXPLANATION REPORT|ORIGINAL AI FINDING SUMMARY|HEMORRHAGE LOCATION AND SEVERITY|VOLUME AND RISK INTERPRETATION|PUBMED RESEARCH SUPPORT|GENERAL MEDICAL CONTEXT|CLINICAL CONSIDERATIONS|MODEL LIMITATIONS|SAFETY DISCLAIMER|CLINICAL INDICATION|FINDINGS|AAST GRADING|IMPRESSION|PHYSICIAN ACTIONS|EAST RECOMMENDATION|LABS \& IMAGING|LABS \& FOLLOW-UP)(.*?)$/gmi,
+                '<h2>$1$2</h2>')
+            .replace(/^â€¢ (.+)$/gm, '<li class="physician-action">$1</li>')
+            .replace(/^- (.+)$/gm, '<li>$1</li>')
+            .replace(/(<li.*<\/li>)/s, '<ul>$1</ul>')
+            .replace(/\n\n/g, '<br><br>')
+            .replace(/\n/g, '<br>');
+    }
+
+    function renderCitations(citations) {
+        if (!citations || citations.length === 0) {
+            return 'PubMed research support unavailable at this time.';
+        }
+        return citations.map((article, i) => {
+            const title = article.title || 'Untitled article';
+            const journal = article.journal || 'Not available';
+            const year = article.year || 'Not available';
+            const pmid = article.pmid || 'Not available';
+            const url = article.url || (article.pmid ? `https://pubmed.ncbi.nlm.nih.gov/${article.pmid}/` : '');
+            const why = article.why_relevant || 'Relevant to trauma hemorrhage imaging or management.';
+            const safeUrl = url || 'Not available';
+            return `${i + 1}. ${title}\n   Journal: ${journal}\n   Year: ${year}\n   PMID: ${pmid}\n   Link: ${safeUrl}\n   Why relevant: ${why}`;
+        }).join('\n\n');
     }
 
     // ── Analyze ────────────────────────────────────────────────────────
@@ -340,16 +371,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Report — render as lightweight HTML (bold headings, no full markdown lib needed)
         const rawReport = result.report || '--';
-        el.llmReport.innerHTML = rawReport
-            .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-            .replace(/^(CLINICAL INDICATION|FINDINGS|AAST GRADING|IMPRESSION|PHYSICIAN ACTIONS|EAST RECOMMENDATION|LABS \& IMAGING|LABS \& FOLLOW-UP)(.*?)$/gm,
-                '<h2>$1$2</h2>')
+        el.llmReport.innerHTML = renderReportHtml(rawReport); /*
             .replace(/^• (.+)$/gm, '<li class="physician-action">$1</li>')
-            .replace(/^- (.+)$/gm, '<li>$1</li>')
-            .replace(/(<li.*<\/li>)/s, '<ul>$1</ul>')
-            .replace(/\n\n/g, '<br><br>')
-            .replace(/\n/g, '<br>');
+
+        */ const rawEnhancedReport = result.research_enhanced_report || 'PubMed research support unavailable at this time.';
+        el.enhancedReport.innerHTML = renderReportHtml(rawEnhancedReport);
+        el.pubmedCitations.innerHTML = renderReportHtml(renderCitations(result.citations || []));
 
         // Patient meta chips
         el.patientMetaChips.innerHTML = '';

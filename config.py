@@ -4,6 +4,9 @@ import re
 # ── Models ─────────────────────────────────────────────────────────────────
 MEDSIGLIP_MODEL_ID = "google/medsiglip-448"
 MEDGEMMA_MODEL_ID  = "google/medgemma-1.5-4b-it"
+MEDGEMMA_LOCAL_FILES_ONLY = os.environ.get("MEDGEMMA_LOCAL_FILES_ONLY", "true").lower() == "true"
+MEDGEMMA_CPU_DTYPE = os.environ.get("MEDGEMMA_CPU_DTYPE", "bfloat16").lower()
+CPU_SAFE_MODE = os.environ.get("CPU_SAFE_MODE", "true").lower() == "true"
 
 HF_TOKEN     = os.environ.get("HF_TOKEN")
 LORA_ADAPTER = os.environ.get("LORA_ADAPTER")  # e.g. "AryanMarwah/medgemma-trauma-lora"

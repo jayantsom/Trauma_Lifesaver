@@ -5,11 +5,12 @@ import torch
 from PIL import Image
 
 from pipeline.layer_1_ct_triager import CTTriager
-from pipeline.layer_2_ct_analyzer import CTVisualAnalyzer
+from pipeline.layer_2_ct_analyzer import CPUFallbackVisualAnalyzer, CTVisualAnalyzer
 from pipeline.layer_3_hemorrhage_segmenter import HemorrhageSegmenter
 from pipeline.layer_4_report_writer import ClinicalReportWriter
 from pipeline.layer_5_qa_streamer import QAStreamer
 from pipeline.quantifier import quantify_hemorrhage
+from pipeline.research_agent import run_research_agent
 import config
 
 class TraumaPipeline:
@@ -19,10 +20,14 @@ class TraumaPipeline:
         cuda_available = torch.cuda.is_available()
         
         self.triager = CTTriager(device="cpu")
-        self.visual_analyzer = CTVisualAnalyzer(
-            device="auto" if cuda_available else "cpu",
-            use_4bit=cuda_available
-        )
+        if config.CPU_SAFE_MODE and not cuda_available:
+            print("[TraumaPipeline] CPU_SAFE_MODE enabled: skipping MedGemma load on CPU.")
+            self.visual_analyzer = CPUFallbackVisualAnalyzer()
+        else:
+            self.visual_analyzer = CTVisualAnalyzer(
+                device="auto" if cuda_available else "cpu",
+                use_4bit=cuda_available
+            )
         self.segmenter = HemorrhageSegmenter(
             device="cuda" if cuda_available else "cpu"
         )
@@ -88,6 +93,13 @@ class TraumaPipeline:
 
         # Layer 4
         report = self.report_writer.write_report(context)
+        research_result = run_research_agent({
+            "report": report,
+            "context": context,
+            "triage": triage_summary,
+            "visual_findings": visual_findings,
+            "quantification": quant_res,
+        })
 
         result = {
             "session_id": session_id,
@@ -96,6 +108,10 @@ class TraumaPipeline:
             "visual_findings": visual_findings,
             "quantification": quant_res,
             "report": report,
+            "clinical_report": report,
+            "structured_report": research_result["structured_report"],
+            "research_enhanced_report": research_result["research_enhanced_report"],
+            "citations": research_result["citations"],
             "vitals": vitals or {},
         }
 

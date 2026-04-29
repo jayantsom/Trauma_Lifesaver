@@ -51,6 +51,10 @@
                     <span class="step-icon pending"><i class="fas fa-circle"></i></span>
                     <span class="step-text">Generating EAST-aligned structured report</span>
                 </div>
+                <div class="step" id="step6">
+                    <span class="step-icon pending"><i class="fas fa-circle"></i></span>
+                    <span class="step-text">Research &amp; Evidence Agent: PubMed retrieval + OpenAI explanation</span>
+                </div>
             </div>
         </div>
     </div>
@@ -279,12 +283,26 @@
 
                     <div class="panel glass-card report-panel">
                         <div class="panel-header">
-                            <span><i class="fas fa-file-medical"></i> Formal Clinical Report</span>
+                            <span><i class="fas fa-file-medical"></i> Clinical Structured Report</span>
                             <button class="btn-copy" id="copyReportBtn">
                                 <i class="fas fa-copy"></i> Copy
                             </button>
                         </div>
                         <div class="report-content" id="llmReport">--</div>
+                    </div>
+
+                    <div class="panel glass-card report-panel">
+                        <div class="panel-header">
+                            <span><i class="fas fa-book-medical"></i> Agentic Clinical Explanation</span>
+                        </div>
+                        <div class="report-content" id="enhancedReport">--</div>
+                    </div>
+
+                    <div class="panel glass-card report-panel">
+                        <div class="panel-header">
+                            <span><i class="fas fa-book-open"></i> Suggested Journal Articles / PubMed Citations</span>
+                        </div>
+                        <div class="report-content citations-content" id="pubmedCitations">--</div>
                     </div>
 
                     <div class="panel glass-card chat-panel">
