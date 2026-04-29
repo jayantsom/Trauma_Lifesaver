@@ -9,11 +9,11 @@ MEDGEMMA_CPU_DTYPE = os.environ.get("MEDGEMMA_CPU_DTYPE", "bfloat16").lower()
 CPU_SAFE_MODE = os.environ.get("CPU_SAFE_MODE", "true").lower() == "true"
 
 HF_TOKEN     = os.environ.get("HF_TOKEN")
-LORA_ADAPTER = os.environ.get("LORA_ADAPTER")  # e.g. "AryanMarwah/medgemma-trauma-lora"
+LORA_ADAPTER = "jayantsom/medgemma-1v5-4b-it-rsna23-abd-ct-peft-lora-r16-a32-ep3-lr2e4-v1"
 
 # ── Layer 1 — Triage ────────────────────────────────────────────────────────
 TRIAGE_IMAGE_SIZE       = 448
-TRIAGE_THRESHOLD        = float(os.environ.get("TRIAGE_THRESHOLD", "0.25"))
+TRIAGE_THRESHOLD        = 0.25
 TRIAGE_MAX_SLICES       = 1   # top-1 slice to Gemma — avoids OOM and tunnel timeout
 
 TRIAGE_LABELS = [
