@@ -11,59 +11,59 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     let currentSessionId = null;
-    let currentJobId     = null;
-    let qaStreaming      = false;
-    let stagedFiles      = null;
-    let previewUrls      = [];
+    let currentJobId = null;
+    let qaStreaming = false;
+    let stagedFiles = null;
+    let previewUrls = [];
 
     const el = {
-        fileInput:          document.getElementById('fileInput'),
-        dropTarget:         document.getElementById('dropTarget'),
-        fileCountBadge:     document.getElementById('fileCountBadge'),
-        fileCountText:      document.getElementById('fileCountText'),
-        ctThumbnails:       document.getElementById('ctThumbnails'),
-        ctResultsStrip:     document.getElementById('ctResultsStrip'),
-        fileValidation:     document.getElementById('fileValidation'),
-        analyzeBtn:         document.getElementById('analyzeBtn'),
-        analyzeHint:        document.getElementById('analyzeHint'),
-        metaPatientId:      document.getElementById('metaPatientId'),
-        metaAge:            document.getElementById('metaAge'),
-        metaState:          document.getElementById('metaState'),
-        clinicalNotes:      document.getElementById('clinicalNotes'),
-        vitHR:              document.getElementById('vitHR'),
-        vitBP:              document.getElementById('vitBP'),
-        vitGCS:             document.getElementById('vitGCS'),
-        loadingOverlay:     document.getElementById('loadingOverlay'),
-        errorBanner:        document.getElementById('errorBanner'),
-        errorMessage:       document.getElementById('errorMessage'),
-        errorDismiss:       document.getElementById('errorDismiss'),
-        resultsContainer:   document.getElementById('resultsContainer'),
-        patientIdDisplay:   document.getElementById('patientIdDisplay'),
-        patientMetaChips:   document.getElementById('patientMetaChips'),
-        riskBanner:         document.getElementById('riskBanner'),
-        riskValue:          document.getElementById('riskValue'),
-        riskVolume:         document.getElementById('riskVolume'),
-        riskEAST:           document.getElementById('riskEAST'),
-        triageRows:         document.getElementById('triageRows'),
-        volume:             document.getElementById('volume'),
-        pixels:             document.getElementById('pixels'),
-        severity:           document.getElementById('severity'),
-        organs:             document.getElementById('organs'),
-        injuryPattern:      document.getElementById('injuryPattern'),
-        diffList:           document.getElementById('diffList'),
-        llmReport:          document.getElementById('llmReport'),
-        enhancedReport:     document.getElementById('enhancedReport'),
-        pubmedCitations:    document.getElementById('pubmedCitations'),
-        copyReportBtn:      document.getElementById('copyReportBtn'),
-        chatHistory:        document.getElementById('chatHistory'),
-        typingIndicator:    document.getElementById('typingIndicator'),
-        qaInput:            document.getElementById('qaInput'),
-        qaSubmit:           document.getElementById('qaSubmit'),
-        chatPopup:          document.getElementById('chatPopup'),
-        chatLauncherBtn:    document.getElementById('chatLauncherBtn'),
-        chatCloseBtn:       document.getElementById('chatCloseBtn'),
-        downloadPdfBtn:     document.getElementById('downloadPdfBtn'),
-        resetBtn:           document.getElementById('resetBtn'),
+        fileInput: document.getElementById('fileInput'),
+        dropTarget: document.getElementById('dropTarget'),
+        fileCountBadge: document.getElementById('fileCountBadge'),
+        fileCountText: document.getElementById('fileCountText'),
+        ctThumbnails: document.getElementById('ctThumbnails'),
+        ctResultsStrip: document.getElementById('ctResultsStrip'),
+        fileValidation: document.getElementById('fileValidation'),
+        analyzeBtn: document.getElementById('analyzeBtn'),
+        analyzeHint: document.getElementById('analyzeHint'),
+        metaPatientId: document.getElementById('metaPatientId'),
+        metaAge: document.getElementById('metaAge'),
+        metaState: document.getElementById('metaState'),
+        clinicalNotes: document.getElementById('clinicalNotes'),
+        vitHR: document.getElementById('vitHR'),
+        vitBP: document.getElementById('vitBP'),
+        vitGCS: document.getElementById('vitGCS'),
+        loadingOverlay: document.getElementById('loadingOverlay'),
+        errorBanner: document.getElementById('errorBanner'),
+        errorMessage: document.getElementById('errorMessage'),
+        errorDismiss: document.getElementById('errorDismiss'),
+        resultsContainer: document.getElementById('resultsContainer'),
+        patientIdDisplay: document.getElementById('patientIdDisplay'),
+        patientMetaChips: document.getElementById('patientMetaChips'),
+        riskBanner: document.getElementById('riskBanner'),
+        riskValue: document.getElementById('riskValue'),
+        riskVolume: document.getElementById('riskVolume'),
+        riskEAST: document.getElementById('riskEAST'),
+        triageRows: document.getElementById('triageRows'),
+        volume: document.getElementById('volume'),
+        pixels: document.getElementById('pixels'),
+        severity: document.getElementById('severity'),
+        organs: document.getElementById('organs'),
+        injuryPattern: document.getElementById('injuryPattern'),
+        diffList: document.getElementById('diffList'),
+        llmReport: document.getElementById('llmReport'),
+        enhancedReport: document.getElementById('enhancedReport'),
+        pubmedCitations: document.getElementById('pubmedCitations'),
+        copyReportBtn: document.getElementById('copyReportBtn'),
+        chatHistory: document.getElementById('chatHistory'),
+        typingIndicator: document.getElementById('typingIndicator'),
+        qaInput: document.getElementById('qaInput'),
+        qaSubmit: document.getElementById('qaSubmit'),
+        chatPopup: document.getElementById('chatPopup'),
+        chatLauncherBtn: document.getElementById('chatLauncherBtn'),
+        chatCloseBtn: document.getElementById('chatCloseBtn'),
+        downloadPdfBtn: document.getElementById('downloadPdfBtn'),
+        resetBtn: document.getElementById('resetBtn'),
     };
 
     // ── File staging ───────────────────────────────────────────────────
@@ -73,7 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
         el.dropTarget.addEventListener(evt, (e) => { e.preventDefault(); e.stopPropagation(); }, false)
     );
 
-    el.dropTarget.addEventListener('dragover',  () => el.dropTarget.classList.add('dragover'));
+    el.dropTarget.addEventListener('dragover', () => el.dropTarget.classList.add('dragover'));
     el.dropTarget.addEventListener('dragleave', () => el.dropTarget.classList.remove('dragover'));
     el.dropTarget.addEventListener('drop', (e) => {
         el.dropTarget.classList.remove('dragover');
@@ -83,7 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function stageFiles(files) {
         if (!files || files.length === 0) return;
 
-        const valid   = Array.from(files).filter(f => f.type.startsWith('image/'));
+        const valid = Array.from(files).filter(f => f.type.startsWith('image/'));
         const invalid = files.length - valid.length;
 
         if (invalid > 0) showValidation(`${invalid} unsupported file(s) skipped — PNG/JPG only`);
@@ -95,8 +95,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        stagedFiles  = valid;
-        previewUrls  = new Array(valid.length).fill(null);
+        stagedFiles = valid;
+        previewUrls = new Array(valid.length).fill(null);
 
         const n = valid.length;
         el.fileCountText.textContent = `${n} file${n !== 1 ? 's' : ''} staged`;
@@ -167,7 +167,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function hideValidation() { el.fileValidation.classList.add('hidden'); }
 
     // ── Loading steps ──────────────────────────────────────────────────
-    const STEP_IDS = ['step1','step2','step3','step4','step5','step6'];
+    const STEP_IDS = ['step1', 'step2', 'step3', 'step4', 'step5', 'step6'];
     let stepTimer = null, currentStep = 0;
 
     function setStepState(id, state) {
@@ -176,9 +176,9 @@ document.addEventListener('DOMContentLoaded', () => {
         s.className = `step ${state}`;
         const icon = s.querySelector('.step-icon');
         if (!icon) return;
-        if (state === 'done')   { icon.className = 'step-icon done';    icon.innerHTML = '<i class="fas fa-check"></i>'; }
-        if (state === 'active') { icon.className = 'step-icon active';  icon.innerHTML = '<i class="fas fa-circle-notch"></i>'; }
-        if (state === 'pending'){ icon.className = 'step-icon pending'; icon.innerHTML = '<i class="fas fa-circle"></i>'; }
+        if (state === 'done') { icon.className = 'step-icon done'; icon.innerHTML = '<i class="fas fa-check"></i>'; }
+        if (state === 'active') { icon.className = 'step-icon active'; icon.innerHTML = '<i class="fas fa-circle-notch"></i>'; }
+        if (state === 'pending') { icon.className = 'step-icon pending'; icon.innerHTML = '<i class="fas fa-circle"></i>'; }
     }
 
     function startLoadingSteps() {
@@ -201,7 +201,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderReportHtml(text) {
         return text
-            .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
             .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
             .replace(/^(ENHANCED CLINICAL EXPLANATION REPORT|AGENTIC CLINICAL EXPLANATION REPORT|ORIGINAL AI FINDING SUMMARY|HEMORRHAGE LOCATION AND SEVERITY|VOLUME AND RISK INTERPRETATION|PUBMED RESEARCH SUPPORT|GENERAL MEDICAL CONTEXT|CLINICAL CONSIDERATIONS|MODEL LIMITATIONS|SAFETY DISCLAIMER|CLINICAL INDICATION|FINDINGS|AAST GRADING|IMPRESSION|PHYSICIAN ACTIONS|EAST RECOMMENDATION|LABS \& IMAGING|LABS \& FOLLOW-UP)(.*?)$/gmi,
                 '<h2>$1$2</h2>')
@@ -242,12 +242,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const formData = new FormData();
         files.forEach(f => formData.append('files', f));
-        if (el.metaPatientId.value.trim()) formData.append('patient_id',     el.metaPatientId.value.trim());
-        if (el.metaAge.value.trim())       formData.append('age',            el.metaAge.value.trim());
-        if (el.metaState.value)            formData.append('clinical_state', el.metaState.value);
+        if (el.metaPatientId.value.trim()) formData.append('patient_id', el.metaPatientId.value.trim());
+        if (el.metaAge.value.trim()) formData.append('age', el.metaAge.value.trim());
+        if (el.metaState.value) formData.append('clinical_state', el.metaState.value);
         if (el.clinicalNotes && el.clinicalNotes.value.trim()) formData.append('clinical_notes', el.clinicalNotes.value.trim());
-        if (el.vitHR.value.trim())  formData.append('hr',  el.vitHR.value.trim());
-        if (el.vitBP.value.trim())  formData.append('bp',  el.vitBP.value.trim());
+        if (el.vitHR.value.trim()) formData.append('hr', el.vitHR.value.trim());
+        if (el.vitBP.value.trim()) formData.append('bp', el.vitBP.value.trim());
         if (el.vitGCS.value.trim()) formData.append('gcs', el.vitGCS.value.trim());
 
         try {
@@ -304,15 +304,15 @@ document.addEventListener('DOMContentLoaded', () => {
         el.patientIdDisplay.textContent = result.patient_id || 'CASE-UNKNOWN';
 
         // Risk banner
-        const quant       = result.quantification || {};
-        const riskLevel   = (quant.risk_level || 'UNKNOWN').toUpperCase();
-        const volumeML    = (quant.volume_ml || 0).toFixed(1);
-        const rec         = quant.recommendation || '--';
+        const quant = result.quantification || {};
+        const riskLevel = (quant.risk_level || 'UNKNOWN').toUpperCase();
+        const volumeML = (quant.volume_ml || 0).toFixed(1);
+        const rec = quant.recommendation || '--';
 
-        el.riskBanner.className    = `risk-banner ${riskLevel.toLowerCase()}`;
-        el.riskValue.textContent   = riskLevel;
-        el.riskVolume.textContent  = `${volumeML} mL`;
-        el.riskEAST.textContent    = rec;
+        el.riskBanner.className = `risk-banner ${riskLevel.toLowerCase()}`;
+        el.riskValue.textContent = riskLevel;
+        el.riskVolume.textContent = `${volumeML} mL`;
+        el.riskEAST.textContent = rec;
 
         // CT images in results sidebar
         el.ctResultsStrip.innerHTML = '';
@@ -330,10 +330,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // Triage rows
         el.triageRows.innerHTML = '';
         scores.forEach((score, i) => {
-            const pct        = Math.round(score * 100);
+            const pct = Math.round(score * 100);
             const suspicious = score >= 0.25;
-            const cls        = suspicious ? 'suspicious' : 'clear';
-            const label      = suspicious ? 'Suspicious' : 'Clear';
+            const cls = suspicious ? 'suspicious' : 'clear';
+            const label = suspicious ? 'Suspicious' : 'Clear';
 
             const row = document.createElement('div');
             row.className = 'triage-row';
@@ -356,9 +356,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Visual findings
         const vf = result.visual_findings || {};
-        el.severity.textContent      = (vf.severity_estimate || '--').toUpperCase();
+        el.severity.textContent = (vf.severity_estimate || '--').toUpperCase();
         const organs = vf.organs_involved || [];
-        el.organs.textContent        = organs.length ? organs.join(', ') : 'None identified';
+        el.organs.textContent = organs.length ? organs.join(', ') : 'None identified';
         el.injuryPattern.textContent = vf.injury_pattern || '--';
 
         // Differential
@@ -387,7 +387,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Patient meta chips
         el.patientMetaChips.innerHTML = '';
-        const age   = el.metaAge.value.trim();
+        const age = el.metaAge.value.trim();
         const state = el.metaState.value;
         const admTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         [age ? `Age: ${age} yrs` : null, state || null, `Admitted: ${admTime}`]
@@ -404,7 +404,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="message ai">
                 <div class="msg-avatar"><i class="fas fa-user-doctor"></i></div>
                 <div class="msg-body">
-                    <div class="msg-role">DR Gemma</div>
+                    <div class="msg-role">Dr. Gemma</div>
                     <div class="msg-text">Scan analyzed. Ask me anything about the findings or treatment options.</div>
                 </div>
             </div>`;
@@ -428,7 +428,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ── Markdown renderer ──────────────────────────────────────────────
     function renderMarkdown(text) {
         return text
-            .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
             .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
             .replace(/\*(.+?)\*/g, '<em>$1</em>')
             .replace(/^#{3}\s+(.+)$/gm, '<strong>$1</strong>')
@@ -465,7 +465,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         appendMessage('You', q, 'user');
         el.qaInput.value = '';
-        const aiTextEl = appendMessage('DR Gemma', '', 'ai');
+        const aiTextEl = appendMessage('Dr. Gemma', '', 'ai');
         let aiRawText = '';
         el.qaSubmit.disabled = true;
         el.typingIndicator.classList.remove('hidden');
@@ -561,24 +561,24 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function resetApp() {
-        el.fileInput.value   = '';
-        stagedFiles          = null;
-        previewUrls          = [];
-        currentSessionId     = null;
-        currentJobId         = null;
+        el.fileInput.value = '';
+        stagedFiles = null;
+        previewUrls = [];
+        currentSessionId = null;
+        currentJobId = null;
 
         el.fileCountBadge.classList.add('hidden');
         el.ctThumbnails.innerHTML = '';
         el.ctThumbnails.classList.add('hidden');
-        el.analyzeBtn.disabled        = true;
-        el.analyzeHint.textContent    = 'Select CT slices to begin';
+        el.analyzeBtn.disabled = true;
+        el.analyzeHint.textContent = 'Select CT slices to begin';
 
-        el.vitHR.value  = '';
-        el.vitBP.value  = '';
+        el.vitHR.value = '';
+        el.vitBP.value = '';
         el.vitGCS.value = '';
         if (el.metaPatientId) el.metaPatientId.value = '';
-        if (el.metaAge)       el.metaAge.value = '';
-        if (el.metaState)     el.metaState.value = '';
+        if (el.metaAge) el.metaAge.value = '';
+        if (el.metaState) el.metaState.value = '';
         if (el.clinicalNotes) el.clinicalNotes.value = '';
 
         el.resultsContainer.classList.add('hidden');
@@ -587,7 +587,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="message ai">
                 <div class="msg-avatar"><i class="fas fa-user-doctor"></i></div>
                 <div class="msg-body">
-                    <div class="msg-role">DR Gemma</div>
+                    <div class="msg-role">Dr. Gemma</div>
                     <div class="msg-text">Hello. Run an analysis, then ask me about the clinical report, agentic explanation, or PubMed citations.</div>
                 </div>
             </div>`;

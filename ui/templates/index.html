@@ -61,19 +61,20 @@
 
     <div class="container">
 
-        <!-- HEADER -->
         <header class="site-header">
             <div class="header-left">
                 <div class="header-logo">
                     <span class="logo-icon"><i class="fas fa-heartbeat"></i></span>
                     <h1 class="header-brand">Trauma <span class="brand-accent">Lifesaver</span></h1>
                 </div>
-                <p class="header-sub">AI-Powered Trauma CT Analysis &nbsp;·&nbsp; MedGemma 1.5 &amp; MedSigLIP Pipeline
+                <p class="header-sub">AI-Powered Trauma CT Analysis &nbsp;·&nbsp; MedSigLIP &amp; MedGemma 1.5 + LoRA
+                    Pipeline
                 </p>
             </div>
             <div class="header-badges">
                 <span class="chip">MedSigLIP-448</span>
                 <span class="chip">MedGemma 1.5 4B</span>
+                <span class="chip">LoRA Fine-Tuned</span>
                 <span class="chip">U-Net Seg</span>
                 <span class="chip">EAST Guidelines</span>
             </div>
@@ -117,13 +118,14 @@
                     <div class="meta-field">
                         <label for="metaPatientId">Patient ID</label>
                         <div class="input-wrap">
-                            <input type="text" id="metaPatientId" class="input-field" placeholder="PT-001">
+                            <input type="text" id="metaPatientId" class="input-field" placeholder="PT-001"
+                                value="PT-8429">
                         </div>
                     </div>
                     <div class="meta-field">
                         <label for="metaAge">Age</label>
                         <div class="input-wrap">
-                            <input type="number" id="metaAge" class="input-field" placeholder="45">
+                            <input type="number" id="metaAge" class="input-field" placeholder="45" value="45">
                             <span class="input-unit">yrs</span>
                         </div>
                     </div>
@@ -132,7 +134,7 @@
                         <div class="input-wrap">
                             <select id="metaState" class="input-field input-select">
                                 <option value="">Select state</option>
-                                <option value="Emergency">Emergency</option>
+                                <option value="Emergency" selected>Emergency</option>
                                 <option value="Trauma Care">Trauma Care</option>
                                 <option value="Critical Care">Critical Care</option>
                                 <option value="Observation">Observation</option>
@@ -144,7 +146,7 @@
                     <label for="clinicalNotes">Clinical Indication &amp; Presenting Symptoms</label>
                     <textarea id="clinicalNotes" class="input-field input-textarea"
                         placeholder="e.g. 45-year-old male presenting after MVA with abdominal pain, hypotension (BP 90/60), and guarding. Concern for intraabdominal hemorrhage."
-                        rows="3"></textarea>
+                        rows="3">45-year-old male presenting after MVA with abdominal pain, hypotension (BP 90/60), and guarding. Concern for intraabdominal hemorrhage.</textarea>
                 </div>
             </div>
 
@@ -156,21 +158,22 @@
                     <div class="vital-field">
                         <label for="vitHR">Heart Rate</label>
                         <div class="input-wrap">
-                            <input type="number" id="vitHR" class="input-field" placeholder="110">
+                            <input type="number" id="vitHR" class="input-field" placeholder="110" value="110">
                             <span class="input-unit">bpm</span>
                         </div>
                     </div>
                     <div class="vital-field">
                         <label for="vitBP">Blood Pressure</label>
                         <div class="input-wrap">
-                            <input type="text" id="vitBP" class="input-field" placeholder="90/60">
+                            <input type="text" id="vitBP" class="input-field" placeholder="90/60" value="90/60">
                             <span class="input-unit">mmHg</span>
                         </div>
                     </div>
                     <div class="vital-field">
                         <label for="vitGCS">GCS Score</label>
                         <div class="input-wrap">
-                            <input type="number" id="vitGCS" class="input-field" placeholder="14" min="3" max="15">
+                            <input type="number" id="vitGCS" class="input-field" placeholder="14" min="3" max="15"
+                                value="14">
                             <span class="input-unit">/ 15</span>
                         </div>
                     </div>
@@ -194,7 +197,7 @@
                 <div class="results-meta">
                     <span class="results-label">Analysis Report</span>
                     <span id="patientIdDisplay" class="patient-id"></span>
-                <div class="patient-meta-chips" id="patientMetaChips"></div>
+                    <div class="patient-meta-chips" id="patientMetaChips"></div>
                 </div>
                 <button id="resetBtn" class="btn-ghost">
                     <i class="fas fa-arrow-left"></i> New Patient
@@ -320,10 +323,10 @@
     <div class="chat-float-root">
         <div class="panel glass-card chat-panel chat-popup hidden" id="chatPopup">
             <div class="panel-header">
-                <span><i class="fas fa-user-doctor"></i> DR Gemma</span>
+                <span><i class="fas fa-user-doctor"></i> Dr. Gemma</span>
                 <div class="panel-actions">
                     <span class="qa-badge">Clinical Q&amp;A</span>
-                    <button class="chat-close" id="chatCloseBtn" type="button" aria-label="Close DR Gemma chat">
+                    <button class="chat-close" id="chatCloseBtn" type="button" aria-label="Close Dr. Gemma chat">
                         <i class="fas fa-xmark"></i>
                     </button>
                 </div>
@@ -332,8 +335,9 @@
                 <div class="message ai">
                     <div class="msg-avatar"><i class="fas fa-user-doctor"></i></div>
                     <div class="msg-body">
-                        <div class="msg-role">DR Gemma</div>
-                        <div class="msg-text">Hello. Run an analysis, then ask me about the clinical report, agentic explanation, or PubMed citations.</div>
+                        <div class="msg-role">Dr. Gemma</div>
+                        <div class="msg-text">Hello. Run an analysis, then ask me about the clinical report, suggested
+                            treatment, or PubMed citations.</div>
                     </div>
                 </div>
             </div>
@@ -341,28 +345,29 @@
                 <span></span><span></span><span></span>
             </div>
             <div class="chat-input-area">
-                <input type="text" id="qaInput" class="chat-input"
-                    placeholder="Ask DR Gemma a clinical question...">
+                <input type="text" id="qaInput" class="chat-input" placeholder="Ask Dr. Gemma a clinical question...">
                 <button id="qaSubmit" class="btn-send" type="button" aria-label="Send question">
                     <i class="fas fa-paper-plane"></i>
                 </button>
             </div>
         </div>
 
-        <button class="chat-fab" id="chatLauncherBtn" type="button" aria-label="Open DR Gemma chat">
+        <button class="chat-fab" id="chatLauncherBtn" type="button" aria-label="Open Dr. Gemma chat">
             <span class="chat-fab-icon"><i class="fas fa-user-doctor"></i></span>
-            <span class="chat-fab-text">DR Gemma</span>
+            <span class="chat-fab-text">Dr. Gemma</span>
         </button>
     </div>
 
     <!-- DISCLAIMER -->
     <footer class="disclaimer">
-        <p class="disclaimer-title"><i class="fas fa-triangle-exclamation"></i> Research Use Only &mdash; Not for Clinical Diagnosis.</p>
-        <p class="disclaimer-body">All reports, findings, and Q&amp;A responses are generated by experimental AI models (MedGemma, MedSigLIP, U-Net) and may contain errors. This tool is for academic and research purposes only &mdash; do not use for clinical decisions. Consult a qualified radiologist or trauma surgeon.</p>
+        <p class="disclaimer-title"><i class="fas fa-triangle-exclamation"></i> Research Use Only &mdash; Not for
+            Clinical Diagnosis.</p>
+        <p class="disclaimer-body">All reports, findings, and Q&amp;A responses are generated by experimental AI models
+            (MedGemma, MedSigLIP, U-Net) and may contain errors. This tool is for academic and research purposes only
+            &mdash; do not use for clinical decisions. Consult a qualified radiologist or trauma surgeon.</p>
     </footer>
 
     <script src="{{ url_for('static', filename='js/main.js') }}?v=dr-gemma-popup"></script>
 </body>
 
 </html>
-

@@ -217,6 +217,10 @@ class ClinicalReportWriter:
             # Two-pass thinking strip: paired tags first, then any remaining unpaired opening tag
             raw = re.sub(r'<unused\d+>[\s\S]*?<unused\d+>', '', raw)
             raw = re.sub(r'<unused\d+>[\s\S]*', '', raw).strip()
+            
+            # Prevent foreign token hallucinations (e.g., Urdu 'رہیں') while keeping basic punctuation/dashes
+            raw = re.sub(r'[^\x00-\x7F\u2013\u2014\u2018-\u201D\u00B0\n]+', '', raw)
+            
             raw = _deloop(raw)
             print(f"[Layer 4] Gemma raw:\n{raw[:500]}")
             return self._parse_gemma_sections(raw)
