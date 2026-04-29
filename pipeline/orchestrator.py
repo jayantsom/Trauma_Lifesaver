@@ -113,6 +113,7 @@ class TraumaPipeline:
             "research_enhanced_report": research_result["research_enhanced_report"],
             "citations": research_result["citations"],
             "vitals": vitals or {},
+            "patient_info": patient_info or {},
         }
 
         self._sessions[session_id] = {

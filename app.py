@@ -11,6 +11,7 @@ except ImportError:
 
 import config
 from pipeline.orchestrator import TraumaPipeline
+from pipeline.pdf_report_generator import create_pdf_download_response, generate_pdf_report
 
 app = Flask(__name__, template_folder="ui/templates", static_folder="ui/static")
 app.config["MAX_CONTENT_LENGTH"] = config.MAX_CONTENT_LENGTH
@@ -105,6 +106,20 @@ def job_status(job_id):
     if job["status"] == "error":
         return jsonify({"status": "error", "success": False, "error": job["error"]})
     return jsonify({"status": "processing"})
+
+
+@app.route("/download-report/<job_id>")
+def download_report(job_id):
+    job = _jobs.get(job_id)
+    if not job or job.get("status") != "done":
+        return jsonify({"success": False, "error": "PDF report generation unavailable at this time."}), 404
+    try:
+        pdf_path = generate_pdf_report(job["result"])
+        return create_pdf_download_response(pdf_path)
+    except Exception:
+        import traceback
+        print(traceback.format_exc())
+        return jsonify({"success": False, "error": "PDF report generation unavailable at this time."}), 500
 
 
 @app.route("/qa-stream")

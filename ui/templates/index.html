@@ -194,7 +194,7 @@
                 <div class="results-meta">
                     <span class="results-label">Analysis Report</span>
                     <span id="patientIdDisplay" class="patient-id"></span>
-                    <div class="patient-meta-chips" id="patientMetaChips"></div>
+                <div class="patient-meta-chips" id="patientMetaChips"></div>
                 </div>
                 <button id="resetBtn" class="btn-ghost">
                     <i class="fas fa-arrow-left"></i> New Patient
@@ -284,9 +284,14 @@
                     <div class="panel glass-card report-panel">
                         <div class="panel-header">
                             <span><i class="fas fa-file-medical"></i> Clinical Structured Report</span>
-                            <button class="btn-copy" id="copyReportBtn">
-                                <i class="fas fa-copy"></i> Copy
-                            </button>
+                            <div class="panel-actions">
+                                <button class="btn-copy hidden" id="downloadPdfBtn">
+                                    <i class="fas fa-file-pdf"></i> Download PDF Report
+                                </button>
+                                <button class="btn-copy" id="copyReportBtn">
+                                    <i class="fas fa-copy"></i> Copy
+                                </button>
+                            </div>
                         </div>
                         <div class="report-content" id="llmReport">--</div>
                     </div>

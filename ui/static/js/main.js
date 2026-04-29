@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     let currentSessionId = null;
+    let currentJobId     = null;
     let qaStreaming      = false;
     let stagedFiles      = null;
     let previewUrls      = [];
@@ -58,6 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
         typingIndicator:    document.getElementById('typingIndicator'),
         qaInput:            document.getElementById('qaInput'),
         qaSubmit:           document.getElementById('qaSubmit'),
+        downloadPdfBtn:     document.getElementById('downloadPdfBtn'),
         resetBtn:           document.getElementById('resetBtn'),
     };
 
@@ -250,6 +252,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const resp = await fetch('/upload', { method: 'POST', body: formData });
             const init = await resp.json();
             if (!init.job_id) throw new Error(init.error || 'Failed to start analysis');
+            currentJobId = init.job_id;
 
             // Step 2: poll /status/<job_id> every 2s
             await pollJob(init.job_id);
@@ -292,6 +295,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderResults(result) {
         currentSessionId = result.session_id;
         el.resultsContainer.classList.remove('hidden');
+        if (currentJobId) el.downloadPdfBtn.classList.remove('hidden');
         el.resultsContainer.scrollIntoView({ behavior: 'smooth' });
 
         el.patientIdDisplay.textContent = result.patient_id || 'CASE-UNKNOWN';
@@ -521,12 +525,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ── Reset ──────────────────────────────────────────────────────────
     el.resetBtn.addEventListener('click', resetApp);
+    el.downloadPdfBtn.addEventListener('click', async () => {
+        if (!currentJobId) return;
+        try {
+            const resp = await fetch(`/download-report/${currentJobId}`);
+            if (!resp.ok) {
+                const data = await resp.json().catch(() => ({}));
+                throw new Error(data.error || 'PDF report generation unavailable at this time.');
+            }
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `trauma-lifesaver-report-${currentJobId}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            showError(err.message || 'PDF report generation unavailable at this time.');
+        }
+    });
 
     function resetApp() {
         el.fileInput.value   = '';
         stagedFiles          = null;
         previewUrls          = [];
         currentSessionId     = null;
+        currentJobId         = null;
 
         el.fileCountBadge.classList.add('hidden');
         el.ctThumbnails.innerHTML = '';
@@ -543,6 +569,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (el.clinicalNotes) el.clinicalNotes.value = '';
 
         el.resultsContainer.classList.add('hidden');
+        el.downloadPdfBtn.classList.add('hidden');
         hideError();
         hideValidation();
         window.scrollTo({ top: 0, behavior: 'smooth' });

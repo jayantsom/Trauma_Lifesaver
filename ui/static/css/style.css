@@ -735,6 +735,13 @@ input[type="file"] { display: none; }
     border-bottom: 1px solid var(--glass-border);
 }
 
+.panel-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
 .panel-header i {
     color: var(--accent-light);
     margin-right: 4px;
