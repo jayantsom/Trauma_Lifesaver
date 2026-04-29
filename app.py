@@ -130,12 +130,17 @@ def qa_stream():
 
     if not session_id or not question: return jsonify({"error": "session_id and q required."}), 400
 
+    def sse_data(token) -> str:
+        """Encode multiline text as valid Server-Sent Events data lines."""
+        text = str(token).replace("\r\n", "\n").replace("\r", "\n")
+        return "".join(f"data: {line}\n" for line in text.split("\n")) + "\n"
+
     def generate():
         try:
             for token in pipeline.run_layer5_qa_stream(session_id, question):
-                yield f"data: {token}\n\n"
+                yield sse_data(token)
         except Exception as e:
-            yield f"data: Error: {str(e)}\n\n"
+            yield sse_data(f"Error: {str(e)}")
         yield "data: [DONE]\n\n"
 
     return Response(stream_with_context(generate()), mimetype="text/event-stream")

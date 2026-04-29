@@ -8,7 +8,7 @@ from pipeline.layer_1_ct_triager import CTTriager
 from pipeline.layer_2_ct_analyzer import CPUFallbackVisualAnalyzer, CTVisualAnalyzer
 from pipeline.layer_3_hemorrhage_segmenter import HemorrhageSegmenter
 from pipeline.layer_4_report_writer import ClinicalReportWriter
-from pipeline.layer_5_qa_streamer import QAStreamer
+from pipeline.layer_5_qa_streamer import QAStreamer, build_chatbot_context
 from pipeline.quantifier import quantify_hemorrhage
 from pipeline.research_agent import run_research_agent
 import config
@@ -118,11 +118,15 @@ class TraumaPipeline:
 
         self._sessions[session_id] = {
             "images": suspicious_images,
-            "context": context,
+            "context": build_chatbot_context(result),
             "timestamp": time.time(),
         }
         self._prune_sessions()
         return result
+
+    def get_analysis_context(self, session_id: str):
+        session = self._sessions.get(session_id)
+        return session.get("context") if session else None
 
     def run_layer5_qa_stream(self, session_id: str, question: str):
         session = self._sessions.get(session_id)

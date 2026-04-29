@@ -59,6 +59,9 @@ document.addEventListener('DOMContentLoaded', () => {
         typingIndicator:    document.getElementById('typingIndicator'),
         qaInput:            document.getElementById('qaInput'),
         qaSubmit:           document.getElementById('qaSubmit'),
+        chatPopup:          document.getElementById('chatPopup'),
+        chatLauncherBtn:    document.getElementById('chatLauncherBtn'),
+        chatCloseBtn:       document.getElementById('chatCloseBtn'),
         downloadPdfBtn:     document.getElementById('downloadPdfBtn'),
         resetBtn:           document.getElementById('resetBtn'),
     };
@@ -399,9 +402,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // Reset chat
         el.chatHistory.innerHTML = `
             <div class="message ai">
-                <div class="msg-avatar"><i class="fas fa-robot"></i></div>
+                <div class="msg-avatar"><i class="fas fa-user-doctor"></i></div>
                 <div class="msg-body">
-                    <div class="msg-role">Trauma AI</div>
+                    <div class="msg-role">DR Gemma</div>
                     <div class="msg-text">Scan analyzed. Ask me anything about the findings or treatment options.</div>
                 </div>
             </div>`;
@@ -439,6 +442,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ── Q&A ────────────────────────────────────────────────────────────
 
+    el.chatLauncherBtn.addEventListener('click', () => {
+        el.chatPopup.classList.remove('hidden');
+        el.qaInput.focus();
+        scrollChat();
+    });
+
+    el.chatCloseBtn.addEventListener('click', () => {
+        el.chatPopup.classList.add('hidden');
+    });
+
     el.qaSubmit.addEventListener('click', submitQuestion);
     el.qaInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitQuestion(); }
@@ -452,7 +465,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         appendMessage('You', q, 'user');
         el.qaInput.value = '';
-        const aiTextEl = appendMessage('Trauma AI', '', 'ai');
+        const aiTextEl = appendMessage('DR Gemma', '', 'ai');
         let aiRawText = '';
         el.qaSubmit.disabled = true;
         el.typingIndicator.classList.remove('hidden');
@@ -497,7 +510,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const avatar = document.createElement('div');
         avatar.className = 'msg-avatar';
-        avatar.innerHTML = isAI ? '<i class="fas fa-robot"></i>' : '<i class="fas fa-user"></i>';
+        avatar.innerHTML = isAI ? '<i class="fas fa-user-doctor"></i>' : '<i class="fas fa-user"></i>';
 
         const body = document.createElement('div');
         body.className = 'msg-body';
@@ -569,6 +582,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (el.clinicalNotes) el.clinicalNotes.value = '';
 
         el.resultsContainer.classList.add('hidden');
+        el.chatPopup.classList.add('hidden');
+        el.chatHistory.innerHTML = `
+            <div class="message ai">
+                <div class="msg-avatar"><i class="fas fa-user-doctor"></i></div>
+                <div class="msg-body">
+                    <div class="msg-role">DR Gemma</div>
+                    <div class="msg-text">Hello. Run an analysis, then ask me about the clinical report, agentic explanation, or PubMed citations.</div>
+                </div>
+            </div>`;
         el.downloadPdfBtn.classList.add('hidden');
         hideError();
         hideValidation();
