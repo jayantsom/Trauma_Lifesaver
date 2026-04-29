@@ -10,8 +10,6 @@ CPU_SAFE_MODE = os.environ.get("CPU_SAFE_MODE", "true").lower() == "true"
 
 HF_TOKEN     = os.environ.get("HF_TOKEN")
 LORA_ADAPTER = "jayantsom/medgemma-1v5-4b-it-rsna23-abd-ct-peft-lora-r16-a32-ep3-lr2e4-v1"
-UNET_SEGMENTER_ID = "jayantsom/unet-resnet34-rsna23-abd-ct-seg-ep10-lr1e4-v1"
-UNET_LOCAL_FILES_ONLY = os.environ.get("UNET_LOCAL_FILES_ONLY", "false").lower() == "true"
 
 # ── Layer 1 — Triage ────────────────────────────────────────────────────────
 TRIAGE_IMAGE_SIZE       = 448
