@@ -80,6 +80,7 @@ def extract_report_fields(report: Any) -> dict:
     quant = payload.get("quantification") or {}
     triage = payload.get("triage") or payload.get("triage_summary") or {}
     context = payload.get("context") or {}
+    patient_info = context.get("patient_info") or payload.get("patient_info") or {}
 
     volume_ml = quant.get("volume_ml", context.get("volume_ml"))
     risk_level = quant.get("risk_level", context.get("risk_level"))
@@ -118,6 +119,8 @@ def extract_report_fields(report: Any) -> dict:
         "suspicious_slices": suspicious_slices,
         "model_findings": model_findings,
         "top_triage_label": top_triage_label,
+        "clinical_notes": context.get("clinical_notes") or patient_info.get("clinical_notes") or "",
+        "patient_age": patient_info.get("age"),
         "limitations": (
             visual.get("raw_response")
             or context.get("raw_response")
@@ -133,30 +136,90 @@ def build_pubmed_queries(fields: dict) -> list[str]:
     queries: list[str] = []
     location = _clean_text(fields.get("anatomical_location"))
     risk_level = _clean_text(str(fields.get("risk_level") or ""))
+    top_label = _clean_text(fields.get("top_triage_label"))
+    notes = _clean_text(fields.get("clinical_notes"))
+    volume_ml = fields.get("volume_ml")
     report_text = _clean_text(
         " ".join([
             fields.get("clinical_report") or "",
             fields.get("model_findings") or "",
             fields.get("top_triage_label") or "",
+            notes,
         ])
     ).lower()
     is_abdominal = bool(location) and any(term in location.lower() for term in ABDOMINAL_TERMS)
     is_abdominal = is_abdominal or any(term in report_text for term in ABDOMINAL_TERMS)
     neuro_not = ' NOT ("brain injuries"[MeSH Terms] OR "traumatic brain injury" OR craniocerebral OR intracranial OR neurotrauma)'
+    adult_not = ""
+    try:
+        if fields.get("patient_age") and int(str(fields["patient_age"])) >= 18:
+            adult_not = ' NOT pediatric NOT children NOT child'
+    except (TypeError, ValueError):
+        pass
+
+    organ_terms = []
+    organ_map = {
+        "liver": ["liver", "hepatic"],
+        "spleen": ["spleen", "splenic"],
+        "kidney": ["kidney", "renal"],
+        "bowel": ["bowel", "intestinal"],
+        "mesenteric": ["mesenteric", "mesentery"],
+    }
+    for organ, terms in organ_map.items():
+        if any(term in f"{location} {top_label} {notes} {report_text}".lower() for term in terms):
+            organ_terms.append(organ)
+    if "solid organ" in top_label.lower() and not organ_terms:
+        organ_terms.extend(["splenic", "liver"])
+
+    if organ_terms:
+        for organ in organ_terms[:3]:
+            queries.append(
+                f'({organ} injury OR {organ} trauma) AND (CT OR computed tomography) '
+                f'AND (hemorrhage OR bleeding OR laceration) AND (management OR embolization OR nonoperative){neuro_not}{adult_not}'
+            )
+
+    if "bowel" in top_label.lower() or "mesenteric" in top_label.lower():
+        queries.insert(
+            0,
+            f'(bowel perforation OR mesenteric injury) AND blunt abdominal trauma AND CT AND (diagnosis OR management){neuro_not}{adult_not}',
+        )
+    elif "hemoperitoneum" in top_label.lower() or "free fluid" in top_label.lower():
+        queries.insert(
+            0,
+            f'(hemoperitoneum OR free fluid) AND blunt abdominal trauma AND CT AND (operative OR nonoperative OR embolization){neuro_not}{adult_not}',
+        )
+    elif "active bleeding" in top_label.lower() or "active hemorrhage" in top_label.lower():
+        queries.insert(
+            0,
+            f'(active bleeding OR contrast extravasation OR active hemorrhage) AND abdominal trauma AND CT angiography AND embolization{neuro_not}{adult_not}',
+        )
+    elif "normal" in top_label.lower() and fields.get("hemorrhage_detected") is not True:
+        queries.insert(
+            0,
+            f'negative abdominal CT blunt trauma observation discharge outcomes{neuro_not}{adult_not}',
+        )
 
     if is_abdominal:
         queries.extend([
-            f'("abdominal injuries"[MeSH Terms] OR abdominal trauma OR intraabdominal hemorrhage OR hemoperitoneum) AND (CT OR computed tomography) AND (management OR embolization OR nonoperative){neuro_not}',
-            f'(liver injury OR splenic injury OR solid organ injury) AND trauma AND (CT OR computed tomography) AND (embolization OR management){neuro_not}',
+            f'("abdominal injuries"[MeSH Terms] OR abdominal trauma OR intraabdominal hemorrhage OR hemoperitoneum) AND (CT OR computed tomography) AND (management OR embolization OR nonoperative){neuro_not}{adult_not}',
+            f'(liver injury OR splenic injury OR solid organ injury) AND trauma AND (CT OR computed tomography) AND (embolization OR management){neuro_not}{adult_not}',
         ])
     elif fields.get("hemorrhage_detected") is True:
-        queries.append(f"traumatic intraabdominal hemorrhage CT volume management{neuro_not}")
+        queries.append(f"traumatic intraabdominal hemorrhage CT volume management{neuro_not}{adult_not}")
     if location:
-        queries.append(f"{location} trauma hemorrhage CT management{neuro_not}")
+        queries.append(f"{location} trauma hemorrhage CT management{neuro_not}{adult_not}")
     if risk_level and is_abdominal:
-        queries.append(f"{risk_level} risk abdominal hemorrhage trauma CT prognosis{neuro_not}")
+        queries.append(f"{risk_level} risk abdominal hemorrhage trauma CT prognosis{neuro_not}{adult_not}")
+    try:
+        volume = float(volume_ml)
+        if volume >= 500:
+            queries.append(f"massive hemoperitoneum abdominal trauma CT embolization mortality{neuro_not}{adult_not}")
+        elif 0 < volume < 50:
+            queries.append(f"small volume hemoperitoneum blunt abdominal trauma CT observation{neuro_not}{adult_not}")
+    except (TypeError, ValueError):
+        pass
     if not queries:
-        queries.append(f"abdominal trauma CT hemorrhage management guidelines{neuro_not}")
+        queries.append(f"abdominal trauma CT hemorrhage management guidelines{neuro_not}{adult_not}")
 
     deduped = []
     for query in queries:
@@ -253,6 +316,12 @@ def rank_articles(fields: dict, articles: list[dict]) -> list[dict]:
         if len(term) > 2
     ]
     location = (fields.get("anatomical_location") or "").lower()
+    source_text = " ".join([
+        fields.get("top_triage_label") or "",
+        fields.get("clinical_notes") or "",
+        fields.get("model_findings") or "",
+        fields.get("clinical_report") or "",
+    ]).lower()
     is_abdominal_case = any(term in location for term in ABDOMINAL_TERMS)
     is_abdominal_case = is_abdominal_case or any(
         term in (fields.get("clinical_report") or "").lower()
@@ -264,6 +333,23 @@ def rank_articles(fields: dict, articles: list[dict]) -> list[dict]:
         "management/prognosis": ["management", "embolization", "operative", "nonoperative", "prognosis", "mortality"],
     }
     abdominal_words = ABDOMINAL_TERMS + ["embolization", "angioembolization", "nonoperative", "laparotomy"]
+    case_terms = []
+    for organ, terms in {
+        "liver/hepatic": ["liver", "hepatic"],
+        "spleen/splenic": ["spleen", "splenic"],
+        "kidney/renal": ["kidney", "renal"],
+        "bowel/mesenteric": ["bowel", "intestinal", "mesenteric", "mesentery", "perforation"],
+        "active bleeding/extravasation": ["active bleeding", "active hemorrhage", "extravasation"],
+        "hemoperitoneum/free fluid": ["hemoperitoneum", "free fluid"],
+    }.items():
+        if any(term in source_text or term in location for term in terms):
+            case_terms.extend(terms)
+    case_terms = list(dict.fromkeys(case_terms))
+    adult_case = False
+    try:
+        adult_case = bool(fields.get("patient_age")) and int(str(fields["patient_age"])) >= 18
+    except (TypeError, ValueError):
+        adult_case = False
 
     ranked = []
     for article in articles:
@@ -271,22 +357,31 @@ def rank_articles(fields: dict, articles: list[dict]) -> list[dict]:
             article.get("title", ""),
             article.get("journal", ""),
             article.get("abstract", ""),
+            article.get("source_query", ""),
         ]).lower()
         score = 0
         reasons = []
         if is_abdominal_case and any(term in haystack for term in NEURO_EXCLUSION_TERMS):
             score -= 10
             reasons.append("penalized because it focuses on neurotrauma rather than abdominal trauma")
+        if adult_case and any(term in haystack for term in ("pediatric", "paediatric", "children", "child")):
+            score -= 4
+            reasons.append("penalized because it focuses on pediatric trauma")
         if is_abdominal_case and any(term in haystack for term in abdominal_words):
             score += 8
             reasons.append("matches abdominal/solid-organ trauma context")
         if location_terms and any(term in haystack for term in location_terms):
             score += 4
             reasons.append("matches the reported anatomical location")
+        if case_terms and any(term in haystack for term in case_terms):
+            score += 6
+            reasons.append("matches the case-specific triage pattern")
         for label, words in keyword_groups.items():
             if any(word in haystack for word in words):
                 score += 2
                 reasons.append(f"contains {label} concepts")
+        if article.get("source_query_index") == 0:
+            score += 2
         try:
             year = int(article.get("year") or 0)
             if year >= 2020:
@@ -306,7 +401,31 @@ def rank_articles(fields: dict, articles: list[dict]) -> list[dict]:
             })
 
     ranked.sort(key=lambda item: item.get("_score", 0), reverse=True)
-    return ranked[:3]
+    selected = []
+    used_pmids = set()
+    used_query_indexes = set()
+
+    # Prefer diversity: first pass picks at most one article from each case-specific query.
+    for article in ranked:
+        pmid = article.get("pmid")
+        query_index = article.get("source_query_index")
+        if pmid in used_pmids or query_index in used_query_indexes:
+            continue
+        selected.append(article)
+        used_pmids.add(pmid)
+        used_query_indexes.add(query_index)
+        if len(selected) == 3:
+            return selected
+
+    for article in ranked:
+        pmid = article.get("pmid")
+        if pmid in used_pmids:
+            continue
+        selected.append(article)
+        used_pmids.add(pmid)
+        if len(selected) == 3:
+            break
+    return selected
 
 
 def _openai_text(data: dict) -> str:
@@ -408,11 +527,16 @@ def run_research_agent(report: Any) -> dict:
     try:
         fields = extract_report_fields(report)
         queries = build_pubmed_queries(fields)
-        pmids = []
-        for query in queries:
-            pmids.extend(search_pubmed(query, max_results=5))
-        deduped_pmids = list(dict.fromkeys(pmids))
-        articles = fetch_pubmed_details(deduped_pmids)
+        articles = []
+        seen_pmids = set()
+        for query_index, query in enumerate(queries):
+            pmids = search_pubmed(query, max_results=6)
+            new_pmids = [pmid for pmid in pmids if pmid not in seen_pmids]
+            seen_pmids.update(new_pmids)
+            for article in fetch_pubmed_details(new_pmids[:4]):
+                article["source_query"] = query
+                article["source_query_index"] = query_index
+                articles.append(article)
         ranked_articles = rank_articles(fields, articles)
         enhanced = generate_enhanced_report_openai(fields, ranked_articles)
         citations = [
