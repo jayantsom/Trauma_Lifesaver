@@ -14,7 +14,7 @@
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=dr-gemma-popup">
+    <link rel="stylesheet" href="../static/css/style.css?v=vitruvian-exact">
 </head>
 
 <body>
@@ -64,19 +64,40 @@
         <header class="site-header">
             <div class="header-left">
                 <div class="header-logo">
-                    <span class="logo-icon"><i class="fas fa-heartbeat"></i></span>
-                    <h1 class="header-brand">Trauma <span class="brand-accent">Lifesaver</span></h1>
+                    <span class="logo-icon" aria-hidden="true">
+                        <img class="logo-art"
+                            src="../static/img/vitruvian-logo.png?v=vitruvian-exact"
+                            alt=""
+                            onerror="this.classList.add('logo-art-missing')" />
+                        <svg class="vitruvian-mark" viewBox="0 0 64 64" role="img">
+                            <rect class="vitruvian-square" x="13" y="13" width="38" height="38" rx="7" />
+                            <circle class="vitruvian-circle" cx="32" cy="32" r="23" />
+                            <line class="vitruvian-limb" x1="32" y1="29" x2="14" y2="22" />
+                            <line class="vitruvian-limb" x1="32" y1="29" x2="50" y2="22" />
+                            <line class="vitruvian-limb" x1="32" y1="29" x2="18" y2="34" />
+                            <line class="vitruvian-limb" x1="32" y1="29" x2="46" y2="34" />
+                            <line class="vitruvian-limb" x1="32" y1="41" x2="22" y2="53" />
+                            <line class="vitruvian-limb" x1="32" y1="41" x2="42" y2="53" />
+                            <line class="vitruvian-limb" x1="32" y1="41" x2="27" y2="54" />
+                            <line class="vitruvian-limb" x1="32" y1="41" x2="37" y2="54" />
+                            <circle class="vitruvian-head" cx="32" cy="19" r="4" />
+                            <path class="vitruvian-body" d="M32 23v18M25 31c3-2 11-2 14 0M27 38h10" />
+                            <path class="vitruvian-scan" d="M20 32h7l3-8 5 16 3-8h6" />
+                        </svg>
+                    </span>
+                    <div class="brand-copy">
+                        <span class="brand-kicker">Emergency CT Decision Support</span>
+                        <h1 class="header-brand">Trauma <span class="brand-accent">Lifesaver</span></h1>
+                    </div>
                 </div>
-                <p class="header-sub">AI-Powered Trauma CT Analysis &nbsp;·&nbsp; MedSigLIP &amp; MedGemma 1.5 + LoRA
-                    Pipeline
-                </p>
+                <p class="header-sub">AI-assisted abdominal trauma CT triage with hemorrhage risk assessment,
+                    structured reporting, and EAST-aligned clinical guidance.</p>
             </div>
             <div class="header-badges">
-                <span class="chip">MedSigLIP-448</span>
-                <span class="chip">MedGemma 1.5 4B</span>
-                <span class="chip">LoRA Fine-Tuned</span>
-                <span class="chip">U-Net Seg</span>
-                <span class="chip">EAST Guidelines</span>
+                <span class="chip"><i class="fas fa-triangle-exclamation"></i> Triage Priority</span>
+                <span class="chip"><i class="fas fa-droplet"></i> Bleed Volume</span>
+                <span class="chip"><i class="fas fa-file-medical"></i> Structured Report</span>
+                <span class="chip"><i class="fas fa-book-medical"></i> Evidence Support</span>
             </div>
         </header>
 
@@ -93,7 +114,15 @@
             <div class="upload-zone" id="dropTarget">
                 <div class="upload-glow"></div>
                 <div class="upload-body">
-                    <div class="upload-icon-wrap"><i class="fas fa-layer-group"></i></div>
+                    <div class="upload-icon-wrap" aria-hidden="true">
+                        <svg class="upload-ct-mark" viewBox="0 0 64 64">
+                            <circle class="ct-ring outer" cx="32" cy="32" r="23" />
+                            <circle class="ct-ring inner" cx="32" cy="32" r="14" />
+                            <path class="ct-cross" d="M32 20v24M20 32h24" />
+                            <path class="ct-scan" d="M16 40c5-10 27-10 32 0" />
+                            <path class="ct-arrow" d="M32 44V27M25 34l7-7 7 7" />
+                        </svg>
+                    </div>
                     <h2 class="upload-heading">Upload CT Slice Series</h2>
                     <p class="upload-sub">Drag &amp; drop PNG / JPG slices here, or click to browse</p>
                     <label class="btn-choose">
@@ -367,7 +396,7 @@
             &mdash; do not use for clinical decisions. Consult a qualified radiologist or trauma surgeon.</p>
     </footer>
 
-    <script src="{{ url_for('static', filename='js/main.js') }}?v=dr-gemma-popup"></script>
+    <script src="../static/js/main.js?v=vitruvian-exact"></script>
 </body>
 
 </html>
