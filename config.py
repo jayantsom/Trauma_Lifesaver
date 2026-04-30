@@ -1,3 +1,10 @@
+"""Central configuration for Trauma Lifesaver.
+
+This file holds model identifiers, prompt builders, risk thresholds, and app
+settings in one place. The rest of the project imports these values rather than
+hard-coding model names or clinical text in multiple modules.
+"""
+
 import os
 import re
 

@@ -1,3 +1,10 @@
+"""Layer 5: post-analysis clinical Q&A.
+
+The chat layer answers only after an analysis has completed. It packages the
+report, risk summary, and real PubMed citations so responses stay grounded in
+the generated case context.
+"""
+
 import re
 import time as _time
 import json
@@ -33,12 +40,14 @@ def _clean_qa_output(text: str) -> str:
 
 
 def _clean_openai_answer(text: str) -> str:
+    """Normalize OpenAI text while preserving the answer wording."""
     text = (text or "").strip()
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text or NOT_ENOUGH_INFO
 
 
 def _text(value) -> str:
+    """Convert optional values into clean strings for prompt context."""
     if value is None:
         return ""
     if isinstance(value, str):
@@ -77,6 +86,7 @@ def _extract_agent_section(text: str, heading: str) -> str:
 
 
 def _format_structured_report(structured: dict) -> str:
+    """Render structured fields into compact text for the Q&A prompt."""
     if not isinstance(structured, dict) or not structured:
         return ""
 
@@ -102,6 +112,7 @@ def _format_structured_report(structured: dict) -> str:
 
 
 def _truncate(text: str, max_chars: int) -> str:
+    """Limit prompt sections so one large report cannot dominate the request."""
     text = text or ""
     if len(text) <= max_chars:
         return text
@@ -133,6 +144,7 @@ def format_citation_context(citations) -> str:
 
 
 def _openai_text(data: dict) -> str:
+    """Extract text from the Responses API shape used by this project."""
     if data.get("output_text"):
         return data["output_text"].strip()
     parts = []
@@ -195,6 +207,7 @@ def build_chatbot_context(result_data: dict) -> dict:
 
 
 def _risk_summary_text(risk_summary: dict) -> str:
+    """Turn the risk payload into a short sentence for fallback answers."""
     if not risk_summary:
         return ""
     lines = []
@@ -212,6 +225,7 @@ def _risk_summary_text(risk_summary: dict) -> str:
 
 
 def _patient_info_text(patient_info: dict) -> str:
+    """Format patient metadata for a compact human-readable summary."""
     if not patient_info:
         return ""
     labels = {
@@ -232,6 +246,7 @@ def _patient_info_text(patient_info: dict) -> str:
 
 
 def _build_openai_qa_context(context: dict) -> str:
+    """Build the grounded prompt payload used by the OpenAI Q&A call."""
     citations = context.get("citations") or []
     citation_context = context.get("citation_context") or "No PubMed citations were returned."
     payload = {
@@ -346,6 +361,7 @@ class QAStreamer:
         self.va = visual_analyzer
 
     def stream_qa_response(self, question: str, context: dict, pil_images: list):
+        """Yield a complete answer or token-like chunks for the chat UI."""
         if context and context.get("chatbot_context_version"):
             answer = answer_question_from_context(question, context)
             yield answer

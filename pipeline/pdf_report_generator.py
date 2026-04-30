@@ -26,18 +26,21 @@ REVIEW_NOTE = "AI-assisted report. Requires physician/radiologist review."
 
 
 def _text(value: Any, default: str = "Not provided") -> str:
+    """Return display-safe text for optional report fields."""
     if value is None or value == "":
         return default
     return str(value)
 
 
 def _paragraph_text(text: str) -> str:
+    """Escape text and preserve line breaks for ReportLab paragraphs."""
     escaped = escape(text or "")
     escaped = escaped.replace("\n", "<br/>")
     return escaped
 
 
 def _section_title(title: str, styles) -> list:
+    """Create a consistent PDF section heading with a divider."""
     return [
         Spacer(1, 0.14 * inch),
         Paragraph(title, styles["SectionHeading"]),
@@ -46,10 +49,12 @@ def _section_title(title: str, styles) -> list:
 
 
 def _body_block(text: str, styles) -> Paragraph:
+    """Build a standard body paragraph block."""
     return Paragraph(_paragraph_text(text or "Not available"), styles["BodyClinical"])
 
 
 def _kv_table(rows: list[tuple[str, Any]], styles) -> Table:
+    """Render label/value rows for demographics, metrics, and citations."""
     data = [[Paragraph(f"<b>{escape(label)}</b>", styles["TableCell"]), Paragraph(escape(_text(value)), styles["TableCell"])] for label, value in rows]
     table = Table(data, colWidths=[1.85 * inch, 4.55 * inch], hAlign="LEFT")
     table.setStyle(TableStyle([
@@ -65,6 +70,7 @@ def _kv_table(rows: list[tuple[str, Any]], styles) -> Table:
 
 
 def _risk_color(risk_level: str) -> colors.Color:
+    """Map the risk label to a soft highlight color."""
     risk = (risk_level or "").upper()
     if risk == "HIGH":
         return colors.HexColor("#fee2e2")
@@ -76,6 +82,7 @@ def _risk_color(risk_level: str) -> colors.Color:
 
 
 def _metric_cards(rows: list[tuple[str, Any]], styles, risk_level: str = "") -> Table:
+    """Render key result metrics as a compact table."""
     data = []
     for label, value in rows:
         data.append([
@@ -98,6 +105,7 @@ def _metric_cards(rows: list[tuple[str, Any]], styles, risk_level: str = "") -> 
 
 
 def _split_report_sections(text: str) -> list[tuple[str | None, str]]:
+    """Split generated report text by known clinical headings."""
     headings = [
         "CLINICAL INDICATION", "FINDINGS", "AAST GRADING", "IMPRESSION",
         "PHYSICIAN ACTIONS", "EAST RECOMMENDATION", "LABS & IMAGING",
@@ -118,6 +126,7 @@ def _split_report_sections(text: str) -> list[tuple[str | None, str]]:
 
 
 def _report_blocks(text: str, styles) -> list:
+    """Convert a report string into ReportLab flowables."""
     blocks = []
     for heading, body in _split_report_sections(text):
         if heading:
@@ -128,6 +137,7 @@ def _report_blocks(text: str, styles) -> list:
 
 
 def _citation_blocks(citations: list[dict], styles) -> list:
+    """Render PubMed citation cards for the PDF."""
     if not citations:
         return [_body_block("PubMed research support unavailable at this time.", styles)]
     blocks = []
@@ -203,6 +213,7 @@ def build_pdf_context(result_data: dict) -> dict:
 
 
 def _draw_footer(canvas, doc):
+    """Draw the review note and page number on every PDF page."""
     canvas.saveState()
     canvas.setFont("Helvetica", 8)
     canvas.setFillColor(colors.HexColor("#53635c"))

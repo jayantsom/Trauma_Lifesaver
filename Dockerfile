@@ -1,5 +1,5 @@
-# HuggingFace Spaces Deployment Dockerfile
-# Hardware target: T4 Small (16 GB VRAM)
+# Container image for the Trauma Lifesaver Flask app.
+# The image is sized for GPU-backed demos such as Hugging Face Spaces or Colab.
 
 FROM pytorch/pytorch:2.1.2-cuda12.1-cudnn8-runtime
 

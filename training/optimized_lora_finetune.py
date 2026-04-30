@@ -1,22 +1,8 @@
-"""
-Optimized LoRA Fine-Tuning: MedGemma 1.5 on RSNA Abdominal Trauma Dataset
-Author: Jayant Som
+"""LoRA fine-tuning script for MedGemma trauma experiments.
 
-This script fine-tunes google/medgemma-1.5-4b-it on the RSNA 2023 dataset.
-It transforms the generalist MedGemma into a trauma-specialist model that can accurately 
-classify the severity and exact organ injuries based on real labeled CT hemorrhage cases.
-
-Fine-Tuning Parameters & Logic:
-- Base Model: google/medgemma-1.5-4b-it (4 billion parameters, multimodal).
-- LoRA Rank (r=16, alpha=32): Targets attention and MLP projection layers (q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj) to inject trainable rank decomposition matrices. This allows parameter-efficient updates.
-- Learning Rate: 2e-4 with a cosine learning rate scheduler and warm-up steps.
-- Batch Size: Effective batch size of 8 (1 per device * 8 accumulation steps).
-- Max Sequence Length: 512, sufficient for the short JSON clinical reports generated.
-- Optimizations:
-  - Lazy Data Loading: Prevents system RAM OOM by loading and converting CT NIfTI volumes on-the-fly during training batches.
-  - Mixed Precision (bfloat16): Dynamically utilizes bfloat16 for stability if supported by the GPU (A100/H100), else falls back to fp16 (T4/V100).
-  - Flash Attention 2: Reduces VRAM usage and accelerates training speed on supported GPUs.
-  - NEFTune Noise (alpha=5.0): Adds noise to embeddings during the forward pass to improve generalization and prevent overfitting on this specialized dataset.
+This is an offline training utility, separate from the Flask app. It prepares
+RSNA abdominal trauma examples as image/text chat pairs and trains lightweight
+LoRA adapters instead of updating the full MedGemma model.
 """
 
 import argparse
@@ -70,10 +56,7 @@ def load_nifti_as_pil(
     center: int = CT_WINDOW_CENTER,
     width: int = CT_WINDOW_WIDTH,
 ) -> Image.Image:
-    """
-    Load a NIfTI CT volume (.nii / .nii.gz) and return a PIL RGB Image using
-    the 2.5D multi-slice approach.
-    """
+    """Load a NIfTI CT volume and convert sampled slices into one RGB image."""
     import nibabel as nib
     import tempfile
 
@@ -115,10 +98,7 @@ def load_nifti_as_pil(
 
 
 class LazyTraumaDataset(torch.utils.data.Dataset):
-    """
-    Lazy dataset wrapper that loads NIfTI volumes on the fly.
-    This prevents OOM crashes on the CPU RAM.
-    """
+    """Dataset wrapper that delays NIfTI loading until a sample is requested."""
     def __init__(self, hf_dataset, max_samples=None, num_slices=3):
         # Consume the iterable dataset into a list so we can index it,
         # but because it's a 'take(200)' stream, it will only download those 200!
@@ -264,6 +244,7 @@ def collate_fn(processor):
 # ---------------------------------------------------------------------------
 
 def train(args):
+    """Run the LoRA training job and save the adapter artifacts."""
     os.environ.setdefault("PYTORCH_ALLOC_CONF", "expandable_segments:True")
 
     print(f"\n{'='*60}")
@@ -429,6 +410,7 @@ def train(args):
 # ---------------------------------------------------------------------------
 
 def parse_args():
+    """Parse command-line options for local or Colab training runs."""
     parser = argparse.ArgumentParser(description="Optimized LoRA fine-tune MedGemma 1.5")
     parser.add_argument("--output_dir", default="models/medgemma-1v5-4b-it-rsna23-abd-ct-peft-lora-r16-a32-ep3-lr2e4-v1",
                         help="Directory to save adapter weights")

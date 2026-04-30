@@ -1,3 +1,10 @@
+"""Layer 4: clinical report assembly.
+
+Most of the report is deterministic so the output stays stable for demos and
+review. If MedGemma is available, it is only used for the narrative clinical
+sections; otherwise the template fallback keeps the workflow moving.
+"""
+
 import re
 import torch
 import config
@@ -6,6 +13,7 @@ import config
 # ── Template builders (deterministic, no Gemma) ─────────────────────────────
 
 def _build_findings(ctx: dict, shock_class: str) -> str:
+    """Create the FINDINGS paragraph from hard pipeline outputs."""
     triage   = ctx.get("triage_summary", {})
     sus      = triage.get("suspicious_count", "?")
     total    = triage.get("total_slices", "?")
@@ -38,6 +46,7 @@ def _build_findings(ctx: dict, shock_class: str) -> str:
 
 
 def _build_aast(organs_l: list, volume: float, risk: str) -> str:
+    """Estimate AAST-style wording from organs, volume, and risk tier."""
     if risk == "HIGH" or volume > 500:
         grade, rationale = "III–IV", "significant hemorrhagic burden"
     elif risk == "MODERATE" or volume > 150:
@@ -73,6 +82,7 @@ def _build_aast(organs_l: list, volume: float, risk: str) -> str:
 
 
 def _deloop(text: str, min_len: int = 55, max_repeats: int = 2) -> str:
+    """Trim repeated long sentences sometimes produced by local generation."""
     parts = re.split(r'(?<=[.!?])\s+', text)
     seen: dict = {}
     kept = []
@@ -120,6 +130,7 @@ class ClinicalReportWriter:
         self.va = visual_analyzer
 
     def write_report(self, context: dict) -> str:
+        """Build a report and fall back to a template if generation fails."""
         try:
             return self._build_report(context)
         except Exception as e:
@@ -131,6 +142,7 @@ class ClinicalReportWriter:
     # ── Assembler ─────────────────────────────────────────────────────────
 
     def _build_report(self, ctx: dict) -> str:
+        """Assemble the final clinical report sections in display order."""
         risk       = ctx.get("risk_level", "LOW")
         east_rec   = config.EAST_RECOMMENDATIONS.get(risk, config.EAST_RECOMMENDATIONS["LOW"])
         shock      = config.get_shock_class(ctx.get("volume_ml", 0))
@@ -165,6 +177,7 @@ class ClinicalReportWriter:
     # ── Gemma: one bounded call for 3 sections ────────────────────────────
 
     def _gemma_clinical_sections(self, ctx, shock, risk, volume, severity, organs_l, vitals_str) -> dict:
+        """Ask MedGemma for the narrative sections in one bounded call."""
         organs_str = ", ".join(organs_l) if organs_l else "no specific organ identified"
         top_label  = ctx.get("top_triage_label", "") or "intraabdominal trauma"
         injury_p   = ctx.get("injury_pattern", "") or "indeterminate"
@@ -229,6 +242,7 @@ class ClinicalReportWriter:
             return {}
 
     def _parse_gemma_sections(self, raw: str) -> dict:
+        """Extract the three expected sections from model text."""
         # Path A: header-based extraction (model repeated the section headers)
         impression = _extract_section(raw, "IMPRESSION", ["PHYSICIAN ACTIONS", "PHYSICIAN NOTE", "LABS"])
         actions    = _extract_section(raw, "PHYSICIAN ACTIONS", ["LABS", "EAST", "IMPRESSION"])
@@ -268,6 +282,7 @@ class ClinicalReportWriter:
 
     @staticmethod
     def _fallback_impression(volume, shock, risk, severity, organs_l) -> str:
+        """Write a conservative impression when model text is unavailable."""
         organs = ", ".join(organs_l) if organs_l else "no specific organ"
         return (
             f"CT angiogram demonstrates traumatic intraabdominal hemorrhage quantified at "
@@ -279,6 +294,7 @@ class ClinicalReportWriter:
     # ── Full template fallback ────────────────────────────────────────────
 
     def _template_fallback(self, ctx: dict) -> str:
+        """Return a complete deterministic report if any dynamic section fails."""
         risk       = ctx.get("risk_level", "LOW")
         east_rec   = config.EAST_RECOMMENDATIONS.get(risk, config.EAST_RECOMMENDATIONS["LOW"])
         shock      = config.get_shock_class(ctx.get("volume_ml", 0))

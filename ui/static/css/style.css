@@ -5,6 +5,11 @@
  *            CT image thumbnails, smooth modern interactions
  */
 
+/*
+ * Clinical dashboard styling starts here. The colors and spacing are kept as
+ * variables so the dark and light modes stay consistent across the app.
+ */
+
 :root {
     --bg: #060d09;
     --bg-mesh-1: rgba(16, 185, 129, 0.10);

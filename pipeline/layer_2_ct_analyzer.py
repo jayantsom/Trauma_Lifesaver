@@ -1,3 +1,10 @@
+"""Layer 2: visual-language interpretation of suspicious CT slices.
+
+When a GPU is available this module runs MedGemma over the slices selected by
+Layer 1. On CPU-only machines the fallback class keeps the rest of the app
+usable without trying to load a very large multimodal model.
+"""
+
 import json
 import torch
 from transformers import AutoProcessor, AutoModelForImageTextToText, BitsAndBytesConfig
@@ -9,6 +16,7 @@ class CTVisualAnalyzer:
     MODEL_ID = config.MEDGEMMA_MODEL_ID
 
     def __init__(self, device="auto", use_4bit=True, hf_token=None, lora_adapter=None):
+        """Load MedGemma with GPU-friendly settings when possible."""
         token = hf_token or config.HF_TOKEN
         cuda_available = torch.cuda.is_available()
         cpu_dtype = {
@@ -69,6 +77,7 @@ class CTVisualAnalyzer:
         print(f"[Layer 2 - CTVisualAnalyzer] Ready on {self._device}. Max slices: {self.max_qa_slices}")
 
     def run_visual_analysis(self, pil_images: list, vitals: dict = None, patient_info: dict = None) -> dict:
+        """Ask MedGemma for structured injury findings from selected slices."""
         slices = pil_images[: self.max_qa_slices]
         content = self._build_content(slices, vitals, patient_info)
         messages = [{"role": "user", "content": content}]
@@ -97,6 +106,7 @@ class CTVisualAnalyzer:
         return self._parse_findings(raw)
 
     def _build_content(self, slices: list, vitals: dict = None, patient_info: dict = None) -> list:
+        """Build the multimodal chat payload expected by the processor."""
         content = []
         for i, img in enumerate(slices):
             content.append({"type": "image", "image": img.convert("RGB")})
@@ -113,6 +123,7 @@ class CTVisualAnalyzer:
         return content
 
     def _parse_findings(self, raw: str) -> dict:
+        """Parse model output, with a text fallback if JSON is imperfect."""
         import re
         # Strip MedGemma thinking tokens before any parsing
         clean = re.sub(r'<unused\d+>[\s\S]*?<unused\d+>', '', raw).strip()
@@ -181,6 +192,7 @@ class CTVisualAnalyzer:
 
     @staticmethod
     def _fill_defaults(parsed: dict, raw: str):
+        """Ensure downstream code can rely on a stable findings dictionary."""
         parsed.setdefault("injury_pattern", "Unable to determine")
         parsed.setdefault("organs_involved", [])
         parsed.setdefault("bleeding_description", "Not identified")
@@ -195,6 +207,7 @@ class CPUFallbackVisualAnalyzer:
     max_qa_slices = 1
 
     def run_visual_analysis(self, pil_images: list, vitals: dict = None, patient_info: dict = None) -> dict:
+        """Return a clear placeholder when MedGemma is intentionally skipped."""
         return {
             "injury_pattern": "MedGemma visual analysis skipped in CPU-safe mode.",
             "organs_involved": [],

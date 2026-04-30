@@ -1,18 +1,8 @@
-"""
-Optimized U-Net Fine-Tuning: Hemorrhage Segmentation on RSNA Abdominal Trauma Dataset
-Author: Jayant Som
+"""Training script for the U-Net hemorrhage segmenter.
 
-This script fine-tunes a ResNet34 U-Net model for pixel-level hemorrhage segmentation
-on the RSNA 2023 dataset directly in Google Colab.
-
-Fine-Tuning Parameters & Logic:
-- Base Model: U-Net with ResNet34 backbone (ImageNet pre-trained)
-- Output: unet-resnet34-rsna23-abd-ct-seg-ep10-lr1e4-v1.pth
-- Optimizations:
-  - Lazy Data Loading: NIfTI volumes are streamed and 2.5D sliced on the fly.
-  - Automatic Mixed Precision (AMP): FP16/BF16 training to halve VRAM usage.
-  - Gradient Accumulation: Simulates a larger batch size on Colab's 16GB GPUs.
-  - Albumentations: Robust data augmentation to prevent overfitting.
+This script was used for Colab-based experiments on the RSNA abdominal trauma
+dataset. It keeps memory usage low by loading NIfTI files lazily and training a
+ResNet34 U-Net on 2.5D CT slices.
 """
 
 import argparse
@@ -50,7 +40,7 @@ from tqdm import tqdm
 # Colab Drive Mounting Setup
 # ---------------------------------------------------------------------------
 def mount_drive_if_colab():
-    """Returns the Colab drive path if it exists, otherwise a local path."""
+    """Return a Drive-backed model folder when running inside Colab."""
     if os.path.exists('/content/drive/MyDrive'):
         return "/content/drive/MyDrive/models"
     else:
@@ -76,10 +66,7 @@ def load_nifti_slice_and_mask(
     center: int = CT_WINDOW_CENTER,
     width: int = CT_WINDOW_WIDTH,
 ):
-    """
-    Load a NIfTI CT volume, extract the middle slice (along with adjacent slices for 2.5D),
-    and extract the corresponding mask.
-    """
+    """Load one CT volume and prepare a middle 2.5D slice with its mask."""
     import nibabel as nib
     import tempfile
 
@@ -136,6 +123,8 @@ def load_nifti_slice_and_mask(
 
 
 class LazySegmentationDataset(Dataset):
+    """Small dataset wrapper that loads CT volumes only when a batch asks for them."""
+
     def __init__(self, hf_dataset, transform=None):
         print("      Fetching metadata for selected samples (this may take a moment)...")
         self.dataset = list(hf_dataset)
@@ -174,6 +163,8 @@ class LazySegmentationDataset(Dataset):
 # ---------------------------------------------------------------------------
 
 class DiceBCELoss(nn.Module):
+    """Combination loss commonly used for sparse medical segmentation masks."""
+
     def __init__(self, weight=None, size_average=True):
         super(DiceBCELoss, self).__init__()
         self.bce = nn.BCEWithLogitsLoss()
@@ -194,6 +185,7 @@ class DiceBCELoss(nn.Module):
 
 
 def train(args):
+    """Run the training loop and save the best checkpoint to disk."""
     print(f"\n{'='*60}")
     print("U-Net (ResNet34) Fine-Tuning on RSNA Trauma Segmentation")
     print(f"{'='*60}\n")
@@ -317,6 +309,7 @@ def train(args):
 # CLI
 # ---------------------------------------------------------------------------
 def parse_args():
+    """Parse command-line options for segmentation training."""
     parser = argparse.ArgumentParser(description="Fine-tune U-Net for RSNA Hemorrhage Segmentation")
     parser.add_argument("--output_dir", type=str, default="/content/drive/MyDrive/Trauma_Lifesaver/models/unet-resnet34-rsna23-abd-ct-seg-ep10-lr1e4-v1",
                         help="Directory to save the trained model weights")

@@ -1,9 +1,17 @@
+"""Pipeline coordinator for a single Trauma Lifesaver analysis run.
+
+The orchestrator keeps the layers in order and passes only the needed context
+between them. Individual model behavior stays inside the layer modules.
+"""
+
 import time
 import uuid
+
 import numpy as np
 import torch
 from PIL import Image
 
+import config
 from pipeline.layer_1_ct_triager import CTTriager
 from pipeline.layer_2_ct_analyzer import CPUFallbackVisualAnalyzer, CTVisualAnalyzer
 from pipeline.layer_3_hemorrhage_segmenter import HemorrhageSegmenter
@@ -11,14 +19,14 @@ from pipeline.layer_4_report_writer import ClinicalReportWriter
 from pipeline.layer_5_qa_streamer import QAStreamer, build_chatbot_context
 from pipeline.quantifier import quantify_hemorrhage
 from pipeline.research_agent import run_research_agent
-import config
+
 
 class TraumaPipeline:
-    """Orchestrates all 5 layers of the Trauma Lifesaver analysis."""
+    """Orchestrates the five analysis layers used by the web app."""
 
     def __init__(self):
         cuda_available = torch.cuda.is_available()
-        
+
         self.triager = CTTriager(device="cpu")
         if config.CPU_SAFE_MODE and not cuda_available:
             print("[TraumaPipeline] CPU_SAFE_MODE enabled: skipping MedGemma load on CPU.")
@@ -26,26 +34,30 @@ class TraumaPipeline:
         else:
             self.visual_analyzer = CTVisualAnalyzer(
                 device="auto" if cuda_available else "cpu",
-                use_4bit=cuda_available
+                use_4bit=cuda_available,
             )
-        self.segmenter = HemorrhageSegmenter(
-            device="cuda" if cuda_available else "cpu"
-        )
+
+        self.segmenter = HemorrhageSegmenter(device="cuda" if cuda_available else "cpu")
         self.report_writer = ClinicalReportWriter(self.visual_analyzer)
         self.qa_streamer = QAStreamer(self.visual_analyzer)
-        
         self._sessions = {}
 
-    def run_pipeline(self, image_paths: list, vitals: dict = None, patient_id: str = None, patient_info: dict = None) -> dict:
+    def run_pipeline(
+        self,
+        image_paths: list,
+        vitals: dict = None,
+        patient_id: str = None,
+        patient_info: dict = None,
+    ) -> dict:
+        """Run all analysis layers for one uploaded CT slice set."""
         session_id = str(uuid.uuid4())
         pil_images = [Image.open(p).convert("RGB") for p in image_paths]
 
-        # Layer 1
+        # Layer 1: quick image/text screening to pick the most suspicious slice.
         suspicious_images, all_triage = self.triager.get_top_suspicious(pil_images)
         triage_summary = self.triager.summarize_triage(all_triage)
 
-        # Layer 2 — top suspicious slices only (capped to avoid OOM)
-        # Also extract the top triage label for report context
+        # Layer 2 uses a capped slice list because MedGemma is the heaviest step.
         top_triage_label = ""
         for r in all_triage:
             if r["suspicious"]:
@@ -55,28 +67,23 @@ class TraumaPipeline:
             top_triage_label = all_triage[0].get("top_label", "")
 
         try:
-            visual_findings = self.visual_analyzer.run_visual_analysis(
-                suspicious_images, vitals
-            )
+            visual_findings = self.visual_analyzer.run_visual_analysis(suspicious_images, vitals)
         except torch.cuda.OutOfMemoryError:
             torch.cuda.empty_cache()
-            visual_findings = self.visual_analyzer.run_visual_analysis(
-                suspicious_images[:1], vitals
-            )
+            visual_findings = self.visual_analyzer.run_visual_analysis(suspicious_images[:1], vitals)
 
-        # Layer 3 — U-Net segments ALL uploaded slices (one at a time, memory-safe)
+        # Layer 3 runs across every uploaded slice, one at a time.
         masks = []
         for path in image_paths:
             try:
                 res = self.segmenter.segment_slice(path)
                 masks.append(res["mask"])
-            except:
+            except Exception:
                 masks.append(np.zeros((512, 512), dtype=np.uint8))
+
         combined_mask = np.stack(masks, axis=0) if masks else np.zeros((1, 512, 512), dtype=np.uint8)
         quant_res = quantify_hemorrhage(combined_mask)
 
-
-        # Free GPU memory before Layer 4 (report synthesis reuses MedGemma)
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
@@ -91,7 +98,7 @@ class TraumaPipeline:
             "patient_id": patient_id,
         }
 
-        # Layer 4
+        # Layer 4 and the research layer consume the same consolidated context.
         report = self.report_writer.write_report(context)
         research_result = run_research_agent({
             "report": report,
@@ -125,10 +132,12 @@ class TraumaPipeline:
         return result
 
     def get_analysis_context(self, session_id: str):
+        """Look up stored context for the chat widget."""
         session = self._sessions.get(session_id)
         return session.get("context") if session else None
 
     def run_layer5_qa_stream(self, session_id: str, question: str):
+        """Stream a clinical Q&A answer for an existing analysis session."""
         session = self._sessions.get(session_id)
         if not session:
             yield "Session expired. Please re-upload."
@@ -136,6 +145,7 @@ class TraumaPipeline:
         yield from self.qa_streamer.stream_qa_response(question, session["context"], session["images"])
 
     def get_status(self):
+        """Return the small health payload used by the Flask endpoint."""
         cuda = torch.cuda.is_available()
         return {
             "models_loaded": True,
@@ -144,6 +154,8 @@ class TraumaPipeline:
         }
 
     def _prune_sessions(self):
+        """Remove stale chat contexts after the configured session TTL."""
         now = time.time()
         expired = [sid for sid, s in self._sessions.items() if now - s["timestamp"] > config.SESSION_TTL]
-        for sid in expired: del self._sessions[sid]
+        for sid in expired:
+            del self._sessions[sid]

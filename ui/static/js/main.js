@@ -2,6 +2,11 @@
  * Trauma Lifesaver — Medical Dashboard UI
  */
 
+/*
+ * The browser side of the app is intentionally lightweight: it stages image
+ * files, polls background jobs, renders reports, and opens the Q&A drawer.
+ */
+
 document.addEventListener('DOMContentLoaded', () => {
 
     // ── Theme toggle ───────────────────────────────────────────────────
