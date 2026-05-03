@@ -210,7 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
             .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
             .replace(/^(ENHANCED CLINICAL EXPLANATION REPORT|AGENTIC CLINICAL EXPLANATION REPORT|ORIGINAL AI FINDING SUMMARY|HEMORRHAGE LOCATION AND SEVERITY|VOLUME AND RISK INTERPRETATION|PUBMED RESEARCH SUPPORT|GENERAL MEDICAL CONTEXT|CLINICAL CONSIDERATIONS|MODEL LIMITATIONS|SAFETY DISCLAIMER|CLINICAL INDICATION|FINDINGS|AAST GRADING|IMPRESSION|PHYSICIAN ACTIONS|EAST RECOMMENDATION|LABS \& IMAGING|LABS \& FOLLOW-UP)(.*?)$/gmi,
                 '<h2>$1$2</h2>')
-            .replace(/^â€¢ (.+)$/gm, '<li class="physician-action">$1</li>')
+            .replace(/^• (.+)$/gm, '<li class="physician-action">$1</li>')
             .replace(/^- (.+)$/gm, '<li>$1</li>')
             .replace(/(<li.*<\/li>)/s, '<ul>$1</ul>')
             .replace(/\n\n/g, '<br><br>')

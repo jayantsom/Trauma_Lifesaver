@@ -54,62 +54,11 @@ def visual_analysis_prompt(n: int, vitals_text: str = "") -> str:
     )
 
 # ── Layer 4 — Report Synthesis ──────────────────────────────────────────────
+# NOTE: report_synthesis_prompt() was removed — Layer 4 now uses the
+# template-driven ClinicalReportWriter in pipeline/layer_4_report_writer.py,
+# which assembles FINDINGS/AAST sections deterministically and calls MedGemma
+# only for the bounded IMPRESSION + PHYSICIAN ACTIONS + LABS block.
 REPORT_MAX_TOKENS = 1024
-
-def report_synthesis_prompt(ctx: dict, east_rec: str, shock_class: str, vitals_str: str) -> str:
-    triage      = ctx.get("triage_summary", {})
-    organs_list = ctx.get("organs_involved", [])
-    organs      = ", ".join(organs_list) if organs_list else "None clearly identified on automated analysis"
-    diffs       = ctx.get("differential_diagnosis", [])
-    differentials = ", ".join(diffs) if diffs else "Not listed"
-    indication  = ctx.get("clinical_notes") or "Abdominal CT angiogram for trauma evaluation."
-    injury_pat  = ctx.get("injury_pattern", "")
-    bleeding    = ctx.get("bleeding_description", "")
-    severity    = ctx.get("severity_estimate", "unknown")
-    volume      = ctx.get("volume_ml", 0)
-    risk        = ctx.get("risk_level", "LOW")
-    sus_count   = triage.get("suspicious_count", "?")
-    total_sl    = triage.get("total_slices", "?")
-    max_sc      = triage.get("max_score", 0)
-
-    # Construct FINDINGS text from hard data regardless of Layer 2 success
-    findings_parts = []
-    findings_parts.append(
-        f"MedSigLIP triage identified {sus_count}/{total_sl} slices as suspicious "
-        f"for intraabdominal pathology (max suspicion score {max_sc:.2f}/1.00)."
-    )
-    if injury_pat and "Unable" not in injury_pat and "raw response" not in injury_pat:
-        findings_parts.append(f"Automated visual analysis: {injury_pat}.")
-    if organs_list:
-        findings_parts.append(f"Organs with potential involvement: {organs}.")
-    if bleeding and "Not identified" not in bleeding:
-        findings_parts.append(f"Hemorrhage characterization: {bleeding}.")
-    findings_parts.append(
-        f"Quantitative hemorrhage analysis estimates {volume:.1f} mL of hemorrhagic volume "
-        f"({shock_class}) with a {risk} risk tier."
-    )
-    if severity not in ("unknown", "none", ""):
-        findings_parts.append(f"Overall injury severity assessed as {severity}.")
-    if vitals_str and vitals_str != "Not provided":
-        findings_parts.append(f"Presenting vitals: {vitals_str}.")
-    findings_text = " ".join(findings_parts)
-
-    return (
-        "You are a trauma radiology attending. Continue this formal CT report.\n"
-        "Use sophisticated medical terminology. Be specific and clinically accurate.\n"
-        "Do NOT restate the instructions. Do NOT output reasoning. Continue directly from AAST GRADING.\n\n"
-        f"=== CONTEXT FOR AAST GRADING ===\n"
-        f"Organs involved: {organs}\n"
-        f"Hemorrhage volume: {volume:.1f} mL ({shock_class})\n"
-        f"Risk tier: {risk} | Severity: {severity}\n"
-        f"Differentials: {differentials}\n"
-        f"EAST recommendation: {east_rec}\n\n"
-        "=== REPORT SO FAR (DO NOT REWRITE) ===\n\n"
-        f"CLINICAL INDICATION\n{indication}\n\n"
-        f"FINDINGS\n{findings_text}\n\n"
-        "=== CONTINUE THE REPORT BELOW ===\n\n"
-        "AAST GRADING\n"
-    )
 
 
 # ── Layer 5 — Q&A ───────────────────────────────────────────────────────────

@@ -214,6 +214,9 @@ body {
 
 .brand-copy {
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
 }
 
 .brand-kicker {
@@ -241,19 +244,21 @@ body {
 }
 
 .header-sub {
-    max-width: 620px;
-    font-size: 0.9rem;
+    max-width: 560px;
+    font-size: 0.88rem;
     color: var(--text-muted);
-    margin-left: 72px;
+    margin-top: 5px;
     line-height: 1.45;
 }
 
 .header-badges {
     display: flex;
-    justify-content: flex-end;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
     gap: 8px;
     flex-wrap: wrap;
-    max-width: 480px;
+    max-width: 260px;
 }
 
 .chip {

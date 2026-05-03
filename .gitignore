@@ -2,4 +2,3 @@ __pycache__/
 *.pyc
 .env
 uploads/
-medgemma-trauma-analysis-main/
