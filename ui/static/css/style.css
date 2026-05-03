@@ -251,14 +251,14 @@ body {
     line-height: 1.45;
 }
 
-.header-badges {
+.model-chips-bar {
     display: flex;
-    flex-direction: column;
-    align-items: flex-end;
+    flex-wrap: wrap;
     justify-content: center;
     gap: 8px;
-    flex-wrap: wrap;
-    max-width: 260px;
+    margin-top: -10px;
+    margin-bottom: var(--sp-lg);
+    padding: 10px 0;
 }
 
 .chip {
@@ -327,7 +327,7 @@ body {
     position: relative;
     border: 2px dashed rgba(16, 185, 129, 0.35);
     border-radius: var(--radius-lg);
-    padding: 3rem var(--sp-lg);
+    padding: 1.4rem var(--sp-lg);
     text-align: center;
     cursor: pointer;
     overflow: hidden;
@@ -350,9 +350,9 @@ body {
 
 .upload-icon-wrap {
     position: relative;
-    width: 64px;
-    height: 64px;
-    border-radius: 20px;
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
     background:
         radial-gradient(circle at 50% 55%, rgba(45, 212, 191, 0.22), transparent 36%),
         linear-gradient(145deg, rgba(13, 148, 136, 0.28), rgba(5, 46, 22, 0.18));
@@ -361,11 +361,11 @@ body {
     align-items: center;
     justify-content: center;
     color: var(--accent-light);
-    margin-bottom: var(--sp-md);
+    margin-bottom: 10px;
     overflow: hidden;
     transition: transform 0.3s, box-shadow 0.3s, border-color 0.3s;
     box-shadow:
-        0 14px 34px rgba(16, 185, 129, 0.14),
+        0 10px 24px rgba(16, 185, 129, 0.14),
         inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
