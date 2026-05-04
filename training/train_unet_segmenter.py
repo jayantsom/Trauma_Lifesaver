@@ -1,333 +1,423 @@
-"""Training script for the U-Net hemorrhage segmenter.
+"""Low-disk RSNA mask-aware trainer for Trauma Lifesaver.
 
-This script was used for Colab-based experiments on the RSNA abdominal trauma
-dataset. It keeps memory usage low by loading NIfTI files lazily and training a
-ResNet34 U-Net on 2.5D CT slices.
+Uses the Hugging Face repo files directly because newer `datasets` releases no
+longer allow this dataset's loading script. By default, downloaded NIfTI files
+are deleted immediately after they are loaded into memory.
 """
 
+from __future__ import annotations
+
 import argparse
+import csv
+import hashlib
 import os
-import sys
+import tempfile
+import urllib.request
+from dataclasses import dataclass
 from pathlib import Path
+
+import albumentations as A
+import nibabel as nib
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
-from PIL import Image
-
-try:
-    import segmentation_models_pytorch as smp
-except ImportError:
-    print("Installing segmentation_models_pytorch...")
-    os.system("pip install segmentation-models-pytorch")
-    import segmentation_models_pytorch as smp
-
-try:
-    import albumentations as A
-    from albumentations.pytorch import ToTensorV2
-except ImportError:
-    print("Installing albumentations...")
-    os.system("pip install albumentations")
-    import albumentations as A
-    from albumentations.pytorch import ToTensorV2
-
-from datasets import load_dataset
+from albumentations.pytorch import ToTensorV2
+from torch.utils.data import ConcatDataset, DataLoader, Dataset
 from tqdm import tqdm
 
+try:
+    import segmentation_models_pytorch as smp
+except ImportError as exc:
+    raise SystemExit("Install first: py -3.11 -m pip install -r requirements-unet.txt") from exc
 
-# ---------------------------------------------------------------------------
-# Colab Drive Mounting Setup
-# ---------------------------------------------------------------------------
-def mount_drive_if_colab():
-    """Return a Drive-backed model folder when running inside Colab."""
-    if os.path.exists('/content/drive/MyDrive'):
-        return "/content/drive/MyDrive/models"
-    else:
-        return "models"
-
-
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
 
 DATASET_ID = "jherng/rsna-2023-abdominal-trauma-detection"
-CT_WINDOW_CENTER = 50
-CT_WINDOW_WIDTH = 400
+BASE_URL = f"https://huggingface.co/datasets/{DATASET_ID}/resolve/main"
+MASK_CONFIGS = ("segmentation", "classification-with-mask")
+INJURY_LABELS = ("bowel", "extravasation", "kidney", "liver", "spleen", "any_injury")
 
 
-# ---------------------------------------------------------------------------
-# Dataset preparation
-# ---------------------------------------------------------------------------
-
-def load_nifti_slice_and_mask(
-    img_path: str,
-    mask_path: str = None,
-    center: int = CT_WINDOW_CENTER,
-    width: int = CT_WINDOW_WIDTH,
-):
-    """Load one CT volume and prepare a middle 2.5D slice with its mask."""
-    import nibabel as nib
-    import tempfile
-
-    def _load_nii(path):
-        if not path.endswith((".nii", ".nii.gz")):
-            with tempfile.TemporaryDirectory() as tmpdir:
-                tmp = os.path.join(tmpdir, "file.nii.gz")
-                os.symlink(os.path.abspath(path), tmp)
-                return nib.load(tmp).get_fdata()
-        return nib.load(path).get_fdata()
-
-    vol = _load_nii(img_path)
-    while vol.ndim > 3:
-        vol = vol[..., 0]
-    if vol.ndim == 2:
-        vol = vol[:, :, np.newaxis]
-
-    depth = vol.shape[2]
-    # Pick the center slice
-    z = depth // 2
-    
-    # 2.5D approach: get z-1, z, z+1
-    z_indices = [max(0, z-1), z, min(depth-1, z+1)]
-    
-    lo = center - width / 2.0
-    hi = center + width / 2.0
-
-    channels = []
-    for zi in z_indices:
-        sl = vol[:, :, zi].astype(np.float32)
-        sl = np.clip(sl, lo, hi)
-        sl = (sl - lo) / (hi - lo) * 255.0
-        channels.append(sl.astype(np.uint8))
-        
-    rgb_image = np.stack(channels, axis=-1)  # (H, W, 3)
-
-    # Process Mask
-    if mask_path and os.path.exists(mask_path):
-        mask_vol = _load_nii(mask_path)
-        while mask_vol.ndim > 3:
-            mask_vol = mask_vol[..., 0]
-        if mask_vol.ndim == 2:
-            mask_vol = mask_vol[:, :, np.newaxis]
-            
-        mask_slice = mask_vol[:, :, z].astype(np.float32)
-        # Assuming hemorrhage label > 0 in the mask
-        binary_mask = (mask_slice > 0).astype(np.float32)
-    else:
-        # If no mask path provided in this dataset sample, create a dummy empty mask.
-        # Note: In a real RSNA segmentation run, ensure mask_path is correctly mapped.
-        binary_mask = np.zeros((rgb_image.shape[0], rgb_image.shape[1]), dtype=np.float32)
-        
-    return rgb_image, binary_mask
+@dataclass(frozen=True)
+class SliceExample:
+    img_url: str
+    mask_url: str
+    z_index: int
+    labels: tuple[float, ...] | None
 
 
-class LazySegmentationDataset(Dataset):
-    """Small dataset wrapper that loads CT volumes only when a batch asks for them."""
+def truthy(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text in {"true", "yes"}:
+        return True
+    try:
+        return float(text) > 0
+    except ValueError:
+        return False
 
-    def __init__(self, hf_dataset, transform=None):
-        print("      Fetching metadata for selected samples (this may take a moment)...")
-        self.dataset = list(hf_dataset)
-        self.transform = transform
+
+def number(value, default=0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def argmax_label(row: dict[str, str], names: tuple[str, ...]) -> int:
+    return int(np.argmax([number(row.get(name)) for name in names]))
+
+
+class RepoCache:
+    def __init__(self, cache_dir: str | Path, keep_niftis: bool):
+        self.cache_dir = Path(cache_dir)
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.keep_niftis = keep_niftis
+
+    def path_for_url(self, url: str) -> Path:
+        suffix = ".nii.gz" if url.endswith(".nii.gz") else Path(url).suffix
+        digest = hashlib.sha256(url.encode("utf-8")).hexdigest()[:24]
+        return self.cache_dir / f"{digest}{suffix}"
+
+    def download_url(self, url: str) -> Path:
+        path = self.path_for_url(url)
+        if not path.exists():
+            try:
+                urllib.request.urlretrieve(url, path)
+            except OSError:
+                path.unlink(missing_ok=True)
+                raise
+        return path
+
+    def download_table(self, name: str) -> Path:
+        path = self.cache_dir / name
+        if not path.exists():
+            urllib.request.urlretrieve(f"{BASE_URL}/{name}", path)
+        return path
+
+    def read_csv(self, name: str) -> list[dict[str, str]]:
+        with self.download_table(name).open("r", newline="", encoding="utf-8") as handle:
+            return list(csv.DictReader(handle))
+
+    def release(self, path: Path):
+        if self.keep_niftis:
+            return
+        try:
+            if path.is_file() and path.parent.resolve() == self.cache_dir.resolve():
+                path.unlink()
+        except OSError:
+            pass
+
+
+def read_nifti(path_text: str) -> np.ndarray:
+    volume = nib.load(path_text).get_fdata(dtype=np.float32)
+    while volume.ndim > 3:
+        volume = volume[..., 0]
+    if volume.ndim == 2:
+        volume = volume[:, :, None]
+    return volume
+
+
+def load_volume(cache: RepoCache, url: str) -> np.ndarray:
+    path = cache.download_url(url)
+    try:
+        volume = read_nifti(str(path))
+    finally:
+        cache.release(path)
+    return volume
+
+
+def split_rows(rows: list[dict], split: str, test_size: float, seed: int) -> list[dict]:
+    order = np.random.RandomState(seed).permutation(len(rows))
+    test_count = int(np.ceil(len(rows) * test_size))
+    wanted = order[test_count:] if split == "train" else order[:test_count]
+    return [rows[int(i)] for i in wanted]
+
+
+def load_items(config: str, split: str, args) -> list[dict]:
+    cache = RepoCache(args.cache_dir, keep_niftis=True)
+    series_rows = cache.read_csv("train_series_meta.csv")
+    label_rows = cache.read_csv("train.csv") if config == "classification-with-mask" else []
+    labels_by_patient = {int(number(r["patient_id"])): r for r in label_rows}
+    items = []
+
+    for row in series_rows:
+        if not truthy(row.get("has_segmentation")):
+            continue
+        patient_id = int(number(row["patient_id"]))
+        series_id = int(number(row["series_id"]))
+        item = {
+            "img_url": f"{BASE_URL}/train_images/{patient_id}/{series_id}.nii.gz",
+            "mask_url": f"{BASE_URL}/segmentations/{series_id}.nii.gz",
+        }
+        if config == "classification-with-mask":
+            labels = labels_by_patient.get(patient_id)
+            if not labels:
+                continue
+            item["labels"] = (
+                float(argmax_label(labels, ("bowel_healthy", "bowel_injury")) > 0),
+                float(argmax_label(labels, ("extravasation_healthy", "extravasation_injury")) > 0),
+                float(argmax_label(labels, ("kidney_healthy", "kidney_low", "kidney_high")) > 0),
+                float(argmax_label(labels, ("liver_healthy", "liver_low", "liver_high")) > 0),
+                float(argmax_label(labels, ("spleen_healthy", "spleen_low", "spleen_high")) > 0),
+                float(truthy(labels.get("any_injury"))),
+            )
+        items.append(item)
+
+    return split_rows(items, split, args.test_size, args.random_state)
+
+
+def choose_slices(mask: np.ndarray, limit: int) -> list[int]:
+    depth = mask.shape[2]
+    positive = np.flatnonzero(mask.reshape(-1, depth).sum(axis=0) > 0)
+    candidates = positive.tolist() if positive.size else [depth // 2]
+    if len(candidates) <= limit:
+        return candidates
+    picks = np.linspace(0, len(candidates) - 1, limit)
+    return [candidates[int(round(i))] for i in picks]
+
+
+def to_uint8(slice_2d: np.ndarray, center: float, width: float) -> np.ndarray:
+    low = center - width / 2
+    high = center + width / 2
+    scaled = (np.clip(slice_2d, low, high) - low) / max(high - low, 1.0)
+    return (scaled * 255).astype(np.uint8)
+
+
+class RSNASliceDataset(Dataset):
+    def __init__(self, config: str, split: str, args, train: bool):
+        self.cache = RepoCache(args.cache_dir, args.keep_nifti_cache)
+        self.args = args
+        self.transform = build_transform(args.image_size, train)
+        self.examples: list[SliceExample] = []
+        items = load_items(config, split, args)
+        max_volumes = args.max_train_volumes if train else args.max_val_volumes
+        if max_volumes:
+            items = items[:max_volumes]
+
+        for item in items:
+            mask = load_volume(self.cache, item["mask_url"])
+            for z in choose_slices(mask, args.slices_per_volume):
+                self.examples.append(SliceExample(item["img_url"], item["mask_url"], z, item.get("labels")))
+
+        if not self.examples:
+            raise RuntimeError(f"No examples found for config={config} split={split}")
 
     def __len__(self):
-        return len(self.dataset)
+        return len(self.examples)
 
-    def __getitem__(self, idx):
-        item = self.dataset[idx]
-        
-        img_path = item.get("img_path")
-        # For RSNA, segmentations are sometimes in a parallel directory or mapped in metadata
-        mask_path = item.get("seg_path") or item.get("mask_path") 
-        
-        try:
-            image, mask = load_nifti_slice_and_mask(img_path, mask_path)
-        except Exception:
-            # Fallback for failing NIfTIs
-            image = np.zeros((224, 224, 3), dtype=np.uint8)
-            mask = np.zeros((224, 224), dtype=np.float32)
-
-        if self.transform:
-            augmented = self.transform(image=image, mask=mask)
-            image = augmented['image']
-            mask = augmented['mask']
-            
-        # Ensure mask has channel dimension (1, H, W)
-        mask = mask.unsqueeze(0)
-        
-        return image, mask
+    def __getitem__(self, index: int):
+        ex = self.examples[index]
+        image_volume = load_volume(self.cache, ex.img_url)
+        mask_volume = load_volume(self.cache, ex.mask_url)
+        z = min(ex.z_index, image_volume.shape[2] - 1, mask_volume.shape[2] - 1)
+        zs = [max(0, z - 1), z, min(image_volume.shape[2] - 1, z + 1)]
+        image = np.stack(
+            [to_uint8(image_volume[:, :, zi], self.args.window_center, self.args.window_width) for zi in zs],
+            axis=-1,
+        )
+        mask = (mask_volume[:, :, z] > 0).astype(np.float32)
+        batch = self.transform(image=image, mask=mask)
+        labels = torch.full((len(INJURY_LABELS),), -1.0)
+        if ex.labels is not None:
+            labels = torch.tensor(ex.labels, dtype=torch.float32)
+        return {"image": batch["image"], "mask": batch["mask"].unsqueeze(0).float(), "labels": labels}
 
 
-# ---------------------------------------------------------------------------
-# Training Logic
-# ---------------------------------------------------------------------------
+def build_transform(image_size: int, train: bool):
+    ops = [A.Resize(image_size, image_size)]
+    if train:
+        ops += [
+            A.HorizontalFlip(p=0.5),
+            A.Affine(scale=(0.92, 1.08), translate_percent=(-0.03, 0.03), rotate=(-12, 12), p=0.5),
+            A.RandomBrightnessContrast(p=0.35),
+        ]
+    ops += [A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)), ToTensorV2()]
+    return A.Compose(ops)
 
-class DiceBCELoss(nn.Module):
-    """Combination loss commonly used for sparse medical segmentation masks."""
 
-    def __init__(self, weight=None, size_average=True):
-        super(DiceBCELoss, self).__init__()
-        self.bce = nn.BCEWithLogitsLoss()
+class Loss(nn.Module):
+    def __init__(self, cls_weight: float):
+        super().__init__()
+        self.seg_bce = nn.BCEWithLogitsLoss()
+        self.cls_bce = nn.BCEWithLogitsLoss()
+        self.cls_weight = cls_weight
 
-    def forward(self, inputs, targets, smooth=1):
-        # BCE Loss
-        bce_loss = self.bce(inputs, targets)
-        
-        # Dice Loss
-        inputs = torch.sigmoid(inputs)       
-        inputs = inputs.view(-1)
-        targets = targets.view(-1)
-        
-        intersection = (inputs * targets).sum()                            
-        dice_loss = 1 - (2.*intersection + smooth)/(inputs.sum() + targets.sum() + smooth)  
-        
-        return bce_loss + dice_loss
+    def forward(self, mask_logits, masks, cls_logits, labels):
+        bce = self.seg_bce(mask_logits, masks)
+        probs = torch.sigmoid(mask_logits)
+        inter = (probs * masks).sum(dim=(1, 2, 3))
+        union = probs.sum(dim=(1, 2, 3)) + masks.sum(dim=(1, 2, 3))
+        dice_loss = 1 - ((2 * inter + 1) / (union + 1)).mean()
+        loss = bce + dice_loss
+        valid = labels[:, 0] >= 0
+        if cls_logits is not None and valid.any():
+            loss = loss + self.cls_weight * self.cls_bce(cls_logits[valid], labels[valid])
+        return loss
+
+
+def model_outputs(output):
+    return output if isinstance(output, tuple) else (output, None)
+
+
+def run_epoch(model, loader, criterion, device, optimizer=None, scaler=None, accum=1):
+    train_mode = optimizer is not None
+    model.train(train_mode)
+    total_loss = 0.0
+    total_dice = 0.0
+    if train_mode:
+        optimizer.zero_grad(set_to_none=True)
+
+    progress = tqdm(loader, desc="train" if train_mode else "valid", leave=False)
+    for step, batch in enumerate(progress, 1):
+        images = batch["image"].to(device)
+        masks = batch["mask"].to(device)
+        labels = batch["labels"].to(device)
+        with torch.set_grad_enabled(train_mode):
+            if scaler:
+                with torch.amp.autocast("cuda"):
+                    mask_logits, cls_logits = model_outputs(model(images))
+                    loss = criterion(mask_logits, masks, cls_logits, labels)
+            else:
+                mask_logits, cls_logits = model_outputs(model(images))
+                loss = criterion(mask_logits, masks, cls_logits, labels)
+            if train_mode and scaler:
+                scaler.scale(loss / accum).backward()
+            elif train_mode:
+                (loss / accum).backward()
+        if train_mode and (step % accum == 0 or step == len(loader)):
+            if scaler:
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                optimizer.step()
+            optimizer.zero_grad(set_to_none=True)
+        with torch.no_grad():
+            pred = (torch.sigmoid(mask_logits) > 0.5).float()
+            inter = (pred * masks).sum(dim=(1, 2, 3))
+            union = pred.sum(dim=(1, 2, 3)) + masks.sum(dim=(1, 2, 3))
+            dice = ((2 * inter + 1) / (union + 1)).mean()
+        total_loss += float(loss.detach())
+        total_dice += float(dice.detach())
+        progress.set_postfix(loss=f"{total_loss / step:.4f}", dice=f"{total_dice / step:.4f}")
+    return total_loss / len(loader), total_dice / len(loader)
+
+
+def make_dataset(args, split: str, train: bool):
+    configs = MASK_CONFIGS if args.config == "both" else (args.config,)
+    parts = [RSNASliceDataset(config, split, args, train) for config in configs]
+    return parts[0] if len(parts) == 1 else ConcatDataset(parts)
+
+
+def save_checkpoint(path: Path, model, args, val_loss, val_dice):
+    torch.save(
+        {
+            "model_state_dict": model.state_dict(),
+            "architecture": "smp.Unet",
+            "encoder": args.encoder,
+            "in_channels": 3,
+            "classes": 1,
+            "image_size": args.image_size,
+            "injury_labels": INJURY_LABELS if args.config in ("both", "classification-with-mask") else (),
+            "val_loss": val_loss,
+            "val_dice": val_dice,
+        },
+        path,
+    )
 
 
 def train(args):
-    """Run the training loop and save the best checkpoint to disk."""
-    print(f"\n{'='*60}")
-    print("U-Net (ResNet34) Fine-Tuning on RSNA Trauma Segmentation")
-    print(f"{'='*60}\n")
+    out_dir = Path(args.output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    ckpt = out_dir / args.checkpoint_name
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    aux = None
+    if args.config in ("both", "classification-with-mask"):
+        aux = {"classes": len(INJURY_LABELS), "pooling": "avg", "dropout": 0.2, "activation": None}
 
-    mount_drive_if_colab()
-
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Extract the directory name to use as the full .pth file name
-    model_name = output_dir.name + ".pth"
-    model_save_path = output_dir / model_name
-    
-    cuda = torch.cuda.is_available()
-    device = torch.device("cuda" if cuda else "cpu")
+    print("=" * 72)
+    print("RSNA 2023 mask-aware training for Trauma Lifesaver")
+    print("=" * 72)
+    print(f"Dataset configs: {args.config}")
     print(f"Device: {device}")
+    print(f"Cache dir: {args.cache_dir}")
+    print(f"Keep NIfTI cache: {args.keep_nifti_cache}")
+    print(f"Output: {ckpt}")
 
-    # --- Load dataset ---
-    print(f"\n[1/4] Loading the dataset ({DATASET_ID}) in streaming mode...")
-    dataset = load_dataset(DATASET_ID, split="train", token=args.hf_token, trust_remote_code=True, streaming=True)
-    if args.max_samples:
-        dataset = dataset.take(args.max_samples)
+    print("\n[1/4] Preparing RSNA slice datasets...")
+    train_ds = make_dataset(args, "train", True)
+    val_ds = make_dataset(args, "test", False)
+    print(f"Train slices: {len(train_ds)}")
+    print(f"Valid slices: {len(val_ds)}")
 
-    # Augmentations
-    train_transform = A.Compose([
-        A.Resize(256, 256),
-        A.HorizontalFlip(p=0.5),
-        A.VerticalFlip(p=0.5),
-        A.RandomRotate90(p=0.5),
-        A.ElasticTransform(p=0.3, alpha=120, sigma=120 * 0.05),
-        A.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1, p=0.5),
-        A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-        ToTensorV2(),
-    ])
+    train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
+    val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
 
-    train_dataset = LazySegmentationDataset(dataset, transform=train_transform)
-    train_loader = DataLoader(
-        train_dataset, 
-        batch_size=args.batch_size, 
-        shuffle=True, 
-        num_workers=0  # 0 to avoid Colab multiprocessing issues
-    )
-
-    # --- Load model ---
-    print(f"\n[2/4] Initializing U-Net model with ResNet34 backbone...")
+    print("\n[2/4] Building U-Net...")
     model = smp.Unet(
-        encoder_name="resnet34",
-        encoder_weights="imagenet",
-        in_channels=3, # 2.5D RGB input
-        classes=1,     # Binary mask (hemorrhage vs background)
-        activation=None
+        encoder_name=args.encoder,
+        encoder_weights=args.encoder_weights,
+        in_channels=3,
+        classes=1,
+        activation=None,
+        aux_params=aux,
     ).to(device)
+    criterion = Loss(args.classification_weight)
+    optimizer = optim.AdamW(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(args.num_epochs, 1))
+    scaler = torch.amp.GradScaler("cuda") if device.type == "cuda" and args.amp else None
 
-    # --- Configuration ---
-    print(f"\n[3/4] Configuring the optimizer and loss function...")
-    criterion = DiceBCELoss()
-    optimizer = optim.AdamW(model.parameters(), lr=args.learning_rate, weight_decay=1e-4)
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.num_epochs)
-    scaler = torch.amp.GradScaler('cuda') if cuda else None
-
-    # --- Train Loop ---
-    print(f"\n[4/4] Starting the training process...")
-    print(f"  Epochs:           {args.num_epochs}")
-    print(f"  Batch size:       {args.batch_size} (Accumulation: {args.gradient_accumulation_steps})")
-    print(f"  Learning rate:    {args.learning_rate}")
-    print(f"  Output Model:     {model_save_path}\n")
-
+    print("\n[3/4] Training...")
     best_loss = float("inf")
-
-    for epoch in range(args.num_epochs):
-        model.train()
-        epoch_loss = 0.0
-        
-        progress_bar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{args.num_epochs}")
-        
-        optimizer.zero_grad()
-        
-        for i, (images, masks) in enumerate(progress_bar):
-            images, masks = images.to(device), masks.to(device)
-
-            # Mixed precision training
-            if cuda:
-                with torch.amp.autocast('cuda'):
-                    outputs = model(images)
-                    loss = criterion(outputs, masks)
-                    loss = loss / args.gradient_accumulation_steps
-                
-                scaler.scale(loss).backward()
-                
-                if (i + 1) % args.gradient_accumulation_steps == 0 or (i + 1) == len(train_loader):
-                    scaler.step(optimizer)
-                    scaler.update()
-                    optimizer.zero_grad()
-            else:
-                outputs = model(images)
-                loss = criterion(outputs, masks)
-                loss = loss / args.gradient_accumulation_steps
-                loss.backward()
-                
-                if (i + 1) % args.gradient_accumulation_steps == 0 or (i + 1) == len(train_loader):
-                    optimizer.step()
-                    optimizer.zero_grad()
-
-            epoch_loss += loss.item() * args.gradient_accumulation_steps
-            progress_bar.set_postfix({"loss": f"{loss.item() * args.gradient_accumulation_steps:.4f}"})
-            
+    best_dice = 0.0
+    for epoch in range(1, args.num_epochs + 1):
+        print(f"\nEpoch {epoch}/{args.num_epochs}")
+        tr_loss, tr_dice = run_epoch(
+            model, train_loader, criterion, device, optimizer, scaler, args.gradient_accumulation_steps
+        )
+        va_loss, va_dice = run_epoch(model, val_loader, criterion, device)
         scheduler.step()
-        avg_loss = epoch_loss / len(train_loader)
-        print(f"Epoch {epoch+1} completed. Average Loss: {avg_loss:.4f}")
-        
-        # Checkpoint
-        if avg_loss < best_loss:
-            best_loss = avg_loss
-            print(f"  --> Saving best model to {model_save_path}")
-            torch.save(model.state_dict(), model_save_path)
-            
-    print(f"\n[Done] Training complete. Best model saved to: {model_save_path}")
+        print(f"train_loss={tr_loss:.4f} train_dice={tr_dice:.4f} val_loss={va_loss:.4f} val_dice={va_dice:.4f}")
+        if va_loss < best_loss:
+            best_loss = va_loss
+            best_dice = va_dice
+            save_checkpoint(ckpt, model, args, va_loss, va_dice)
+            print(f"Saved best checkpoint: {ckpt}")
+
+    print("\n[4/4] Done.")
+    print(f"Best validation loss: {best_loss:.4f}")
+    print(f"Best validation Dice: {best_dice:.4f}")
+    print(f"Checkpoint: {ckpt}")
 
 
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
 def parse_args():
-    """Parse command-line options for segmentation training."""
-    parser = argparse.ArgumentParser(description="Fine-tune U-Net for RSNA Hemorrhage Segmentation")
-    parser.add_argument("--output_dir", type=str, default="/content/drive/MyDrive/Trauma_Lifesaver/models/unet-resnet34-rsna23-abd-ct-seg-ep10-lr1e4-v1",
-                        help="Directory to save the trained model weights")
-    parser.add_argument("--num_epochs", type=int, default=10,
-                        help="Number of training epochs")
-    parser.add_argument("--max_samples", type=int, default=200,
-                        help="Max training examples (use 200 for fast prototype, increase for production)")
-    parser.add_argument("--batch_size", type=int, default=4,
-                        help="Batch size per forward pass")
-    parser.add_argument("--gradient_accumulation_steps", type=int, default=4,
-                        help="Number of steps to accumulate gradients (effective batch size = batch_size * grad_accum)")
-    parser.add_argument("--learning_rate", type=float, default=1e-4,
-                        help="Peak learning rate")
-    parser.add_argument("--hf_token", type=str, default=None,
-                        help="HuggingFace token")
+    parser = argparse.ArgumentParser(description="Train U-Net on RSNA mask-aware configs.")
+    parser.add_argument("--config", choices=("segmentation", "classification-with-mask", "both"), default="both")
+    parser.add_argument("--output_dir", default="models/unet_hemorrhage")
+    parser.add_argument("--checkpoint_name", default="unet_hemorrhage_rsna_mask_aware.pth")
+    parser.add_argument("--cache_dir", default=os.path.join(tempfile.gettempdir(), "trauma_lifesaver_rsna_cache"))
+    parser.add_argument("--keep_nifti_cache", action="store_true")
+    parser.add_argument("--num_epochs", type=int, default=10)
+    parser.add_argument("--batch_size", type=int, default=4)
+    parser.add_argument("--gradient_accumulation_steps", type=int, default=2)
+    parser.add_argument("--learning_rate", type=float, default=1e-4)
+    parser.add_argument("--weight_decay", type=float, default=1e-4)
+    parser.add_argument("--classification_weight", type=float, default=0.25)
+    parser.add_argument("--encoder", default="resnet34")
+    parser.add_argument("--encoder_weights", default="imagenet")
+    parser.add_argument("--image_size", type=int, default=256)
+    parser.add_argument("--slices_per_volume", type=int, default=6)
+    parser.add_argument("--max_train_volumes", type=int, default=None)
+    parser.add_argument("--max_val_volumes", type=int, default=None)
+    parser.add_argument("--window_center", type=float, default=50.0)
+    parser.add_argument("--window_width", type=float, default=400.0)
+    parser.add_argument("--test_size", type=float, default=0.1)
+    parser.add_argument("--random_state", type=int, default=42)
+    parser.add_argument("--num_workers", type=int, default=0)
+    parser.add_argument("--amp", action=argparse.BooleanOptionalAction, default=True)
     return parser.parse_args()
 
 
 if __name__ == "__main__":
-    args = parse_args()
-    train(args)
+    train(parse_args())
