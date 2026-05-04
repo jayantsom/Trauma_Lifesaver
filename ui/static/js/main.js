@@ -52,6 +52,13 @@ document.addEventListener('DOMContentLoaded', () => {
         triageRows: document.getElementById('triageRows'),
         volume: document.getElementById('volume'),
         pixels: document.getElementById('pixels'),
+        clsAnyInjury: document.getElementById('clsAnyInjury'),
+        clsSpleen: document.getElementById('clsSpleen'),
+        clsLiver: document.getElementById('clsLiver'),
+        clsKidney: document.getElementById('clsKidney'),
+        clsBowel: document.getElementById('clsBowel'),
+        clsExtravasation: document.getElementById('clsExtravasation'),
+        clsPositiveLabels: document.getElementById('clsPositiveLabels'),
         severity: document.getElementById('severity'),
         organs: document.getElementById('organs'),
         injuryPattern: document.getElementById('injuryPattern'),
@@ -233,6 +240,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }).join('\n\n');
     }
 
+    function formatProbability(value) {
+        // Render model probabilities as compact percentages for the dashboard.
+        if (typeof value !== 'number' || Number.isNaN(value)) return '--';
+        return `${Math.round(value * 100)}%`;
+    }
+
     // ── Analyze ────────────────────────────────────────────────────────
     el.analyzeBtn.addEventListener('click', async () => {
         if (!stagedFiles || stagedFiles.length === 0) return;
@@ -358,6 +371,20 @@ document.addEventListener('DOMContentLoaded', () => {
         // Quantification
         el.volume.textContent = `${volumeML} mL`;
         el.pixels.textContent = (quant.num_voxels || 0).toLocaleString();
+
+        // Layer 3 classification labels
+        const cls = result.classification || {};
+        const probs = cls.probabilities || {};
+        // These probabilities come from the auxiliary head of the
+        // classification-with-mask U-Net checkpoint.
+        el.clsAnyInjury.textContent = formatProbability(probs.any_injury);
+        el.clsSpleen.textContent = formatProbability(probs.spleen);
+        el.clsLiver.textContent = formatProbability(probs.liver);
+        el.clsKidney.textContent = formatProbability(probs.kidney);
+        el.clsBowel.textContent = formatProbability(probs.bowel);
+        el.clsExtravasation.textContent = formatProbability(probs.extravasation);
+        const positives = cls.positive_labels || [];
+        el.clsPositiveLabels.textContent = positives.length ? positives.join(', ') : 'None above threshold';
 
         // Visual findings
         const vf = result.visual_findings || {};

@@ -40,6 +40,8 @@ INJURY_LABELS = ("bowel", "extravasation", "kidney", "liver", "spleen", "any_inj
 
 @dataclass(frozen=True)
 class SliceExample:
+    """One 2D training slice selected from a 3D CT volume."""
+
     img_url: str
     mask_url: str
     z_index: int
@@ -47,6 +49,7 @@ class SliceExample:
 
 
 def truthy(value) -> bool:
+    """Convert CSV-style truth values into a Python boolean."""
     if isinstance(value, bool):
         return value
     text = str(value).strip().lower()
@@ -59,6 +62,7 @@ def truthy(value) -> bool:
 
 
 def number(value, default=0.0) -> float:
+    """Parse a numeric CSV field while keeping malformed values harmless."""
     try:
         return float(value)
     except (TypeError, ValueError):
@@ -66,21 +70,27 @@ def number(value, default=0.0) -> float:
 
 
 def argmax_label(row: dict[str, str], names: tuple[str, ...]) -> int:
+    """Return the winning class index for one-hot RSNA label columns."""
     return int(np.argmax([number(row.get(name)) for name in names]))
 
 
 class RepoCache:
+    """Tiny file cache for RSNA metadata and NIfTI downloads."""
+
     def __init__(self, cache_dir: str | Path, keep_niftis: bool):
+        """Create the cache folder and remember whether volumes should persist."""
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.keep_niftis = keep_niftis
 
     def path_for_url(self, url: str) -> Path:
+        """Map a remote URL to a stable local cache filename."""
         suffix = ".nii.gz" if url.endswith(".nii.gz") else Path(url).suffix
         digest = hashlib.sha256(url.encode("utf-8")).hexdigest()[:24]
         return self.cache_dir / f"{digest}{suffix}"
 
     def download_url(self, url: str) -> Path:
+        """Download a NIfTI file if it is not already cached."""
         path = self.path_for_url(url)
         if not path.exists():
             try:
@@ -91,16 +101,19 @@ class RepoCache:
         return path
 
     def download_table(self, name: str) -> Path:
+        """Download a small CSV metadata table from the HF dataset repo."""
         path = self.cache_dir / name
         if not path.exists():
             urllib.request.urlretrieve(f"{BASE_URL}/{name}", path)
         return path
 
     def read_csv(self, name: str) -> list[dict[str, str]]:
+        """Read a cached or newly downloaded CSV table."""
         with self.download_table(name).open("r", newline="", encoding="utf-8") as handle:
             return list(csv.DictReader(handle))
 
     def release(self, path: Path):
+        """Remove a downloaded volume after use when low-disk mode is active."""
         if self.keep_niftis:
             return
         try:
@@ -111,6 +124,7 @@ class RepoCache:
 
 
 def read_nifti(path_text: str) -> np.ndarray:
+    """Load a NIfTI file as a float32 H x W x D volume."""
     volume = nib.load(path_text).get_fdata(dtype=np.float32)
     while volume.ndim > 3:
         volume = volume[..., 0]
@@ -120,6 +134,7 @@ def read_nifti(path_text: str) -> np.ndarray:
 
 
 def load_volume(cache: RepoCache, url: str) -> np.ndarray:
+    """Download, load, and optionally release one CT or mask volume."""
     path = cache.download_url(url)
     try:
         volume = read_nifti(str(path))
@@ -129,6 +144,7 @@ def load_volume(cache: RepoCache, url: str) -> np.ndarray:
 
 
 def split_rows(rows: list[dict], split: str, test_size: float, seed: int) -> list[dict]:
+    """Reproduce the dataset's deterministic train/test split."""
     order = np.random.RandomState(seed).permutation(len(rows))
     test_count = int(np.ceil(len(rows) * test_size))
     wanted = order[test_count:] if split == "train" else order[:test_count]
@@ -136,6 +152,7 @@ def split_rows(rows: list[dict], split: str, test_size: float, seed: int) -> lis
 
 
 def load_items(config: str, split: str, args) -> list[dict]:
+    """Build RSNA sample dictionaries without using deprecated dataset scripts."""
     cache = RepoCache(args.cache_dir, keep_niftis=True)
     series_rows = cache.read_csv("train_series_meta.csv")
     label_rows = cache.read_csv("train.csv") if config == "classification-with-mask" else []
@@ -169,6 +186,7 @@ def load_items(config: str, split: str, args) -> list[dict]:
 
 
 def choose_slices(mask: np.ndarray, limit: int) -> list[int]:
+    """Choose mask-positive slices, falling back to the center slice if needed."""
     depth = mask.shape[2]
     positive = np.flatnonzero(mask.reshape(-1, depth).sum(axis=0) > 0)
     candidates = positive.tolist() if positive.size else [depth // 2]
@@ -179,6 +197,7 @@ def choose_slices(mask: np.ndarray, limit: int) -> list[int]:
 
 
 def to_uint8(slice_2d: np.ndarray, center: float, width: float) -> np.ndarray:
+    """Apply a CT window and scale one slice to uint8 image space."""
     low = center - width / 2
     high = center + width / 2
     scaled = (np.clip(slice_2d, low, high) - low) / max(high - low, 1.0)
@@ -186,7 +205,10 @@ def to_uint8(slice_2d: np.ndarray, center: float, width: float) -> np.ndarray:
 
 
 class RSNASliceDataset(Dataset):
+    """Lazy 2.5D slice dataset built from mask-aware RSNA volumes."""
+
     def __init__(self, config: str, split: str, args, train: bool):
+        """Index useful slices once, then load image/mask volumes per batch."""
         self.cache = RepoCache(args.cache_dir, args.keep_nifti_cache)
         self.args = args
         self.transform = build_transform(args.image_size, train)
@@ -205,9 +227,11 @@ class RSNASliceDataset(Dataset):
             raise RuntimeError(f"No examples found for config={config} split={split}")
 
     def __len__(self):
+        """Return the number of selected 2D slices."""
         return len(self.examples)
 
     def __getitem__(self, index: int):
+        """Load one 2.5D image, binary mask, and optional injury-label vector."""
         ex = self.examples[index]
         image_volume = load_volume(self.cache, ex.img_url)
         mask_volume = load_volume(self.cache, ex.mask_url)
@@ -226,6 +250,7 @@ class RSNASliceDataset(Dataset):
 
 
 def build_transform(image_size: int, train: bool):
+    """Create train/validation preprocessing and augmentation transforms."""
     ops = [A.Resize(image_size, image_size)]
     if train:
         ops += [
@@ -238,13 +263,17 @@ def build_transform(image_size: int, train: bool):
 
 
 class Loss(nn.Module):
+    """Dice+BCE segmentation loss with optional classification BCE."""
+
     def __init__(self, cls_weight: float):
+        """Set up segmentation and classification loss terms."""
         super().__init__()
         self.seg_bce = nn.BCEWithLogitsLoss()
         self.cls_bce = nn.BCEWithLogitsLoss()
         self.cls_weight = cls_weight
 
     def forward(self, mask_logits, masks, cls_logits, labels):
+        """Compute multitask loss for one batch."""
         bce = self.seg_bce(mask_logits, masks)
         probs = torch.sigmoid(mask_logits)
         inter = (probs * masks).sum(dim=(1, 2, 3))
@@ -258,10 +287,12 @@ class Loss(nn.Module):
 
 
 def model_outputs(output):
+    """Normalize SMP output into mask logits and optional class logits."""
     return output if isinstance(output, tuple) else (output, None)
 
 
 def run_epoch(model, loader, criterion, device, optimizer=None, scaler=None, accum=1):
+    """Run one train or validation epoch and return average loss/Dice."""
     train_mode = optimizer is not None
     model.train(train_mode)
     total_loss = 0.0
@@ -305,12 +336,14 @@ def run_epoch(model, loader, criterion, device, optimizer=None, scaler=None, acc
 
 
 def make_dataset(args, split: str, train: bool):
+    """Build one or more configured datasets for the requested split."""
     configs = MASK_CONFIGS if args.config == "both" else (args.config,)
     parts = [RSNASliceDataset(config, split, args, train) for config in configs]
     return parts[0] if len(parts) == 1 else ConcatDataset(parts)
 
 
 def save_checkpoint(path: Path, model, args, val_loss, val_dice):
+    """Persist the best model and the metadata needed for app inference."""
     torch.save(
         {
             "model_state_dict": model.state_dict(),
@@ -328,6 +361,7 @@ def save_checkpoint(path: Path, model, args, val_loss, val_dice):
 
 
 def train(args):
+    """Coordinate dataset setup, model creation, training, and checkpointing."""
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     ckpt = out_dir / args.checkpoint_name
@@ -392,6 +426,7 @@ def train(args):
 
 
 def parse_args():
+    """Parse CLI options for local or Colab training."""
     parser = argparse.ArgumentParser(description="Train U-Net on RSNA mask-aware configs.")
     parser.add_argument("--config", choices=("segmentation", "classification-with-mask", "both"), default="both")
     parser.add_argument("--output_dir", default="models/unet_hemorrhage")

@@ -21,10 +21,37 @@ from pipeline.quantifier import quantify_hemorrhage
 from pipeline.research_agent import run_research_agent
 
 
+def _aggregate_classification(slice_results: list) -> dict:
+    """Aggregate Layer 3 injury-label probabilities across uploaded slices."""
+    rows = [r.get("classification") for r in slice_results if r.get("classification")]
+    if not rows:
+        return {"probabilities": {}, "positive_labels": [], "threshold": 0.5}
+
+    # Max probability answers "did any uploaded slice look positive?", while
+    # mean probability remains available for auditing smoother series-level
+    # behavior later.
+    labels = list(rows[0].keys())
+    probabilities = {}
+    mean_probabilities = {}
+    for label in labels:
+        values = [float(row.get(label, 0.0)) for row in rows]
+        probabilities[label] = round(max(values), 4)
+        mean_probabilities[label] = round(float(np.mean(values)), 4)
+
+    positive_labels = [label for label, prob in probabilities.items() if prob >= 0.5]
+    return {
+        "probabilities": probabilities,
+        "mean_probabilities": mean_probabilities,
+        "positive_labels": positive_labels,
+        "threshold": 0.5,
+    }
+
+
 class TraumaPipeline:
     """Orchestrates the five analysis layers used by the web app."""
 
     def __init__(self):
+        """Load shared models once so each upload can reuse them."""
         cuda_available = torch.cuda.is_available()
 
         self.triager = CTTriager(device="cpu")
@@ -74,15 +101,20 @@ class TraumaPipeline:
 
         # Layer 3 runs across every uploaded slice, one at a time.
         masks = []
+        layer3_results = []
         for path in image_paths:
             try:
                 res = self.segmenter.segment_slice(path)
                 masks.append(res["mask"])
+                layer3_results.append(res)
             except Exception:
                 masks.append(np.zeros((512, 512), dtype=np.uint8))
 
+        # Quantification still comes from the mask. The classification payload is
+        # carried alongside it for the UI and downstream report context.
         combined_mask = np.stack(masks, axis=0) if masks else np.zeros((1, 512, 512), dtype=np.uint8)
         quant_res = quantify_hemorrhage(combined_mask)
+        classification_res = _aggregate_classification(layer3_results)
 
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
@@ -90,6 +122,7 @@ class TraumaPipeline:
         context = {
             **visual_findings,
             **quant_res,
+            "classification": classification_res,
             "vitals": vitals or {},
             "patient_info": patient_info or {},
             "clinical_notes": (patient_info or {}).get("clinical_notes", ""),
@@ -106,6 +139,7 @@ class TraumaPipeline:
             "triage": triage_summary,
             "visual_findings": visual_findings,
             "quantification": quant_res,
+            "classification": classification_res,
         })
 
         result = {
@@ -114,6 +148,7 @@ class TraumaPipeline:
             "triage": triage_summary,
             "visual_findings": visual_findings,
             "quantification": quant_res,
+            "classification": classification_res,
             "report": report,
             "clinical_report": report,
             "structured_report": research_result["structured_report"],
