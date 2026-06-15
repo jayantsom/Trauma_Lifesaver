@@ -1,0 +1,29 @@
+PROPRIETARY AND SOURCE-AVAILABLE LICENSE AGREEMENT
+
+Project: Trauma Lifesaver
+Copyright (c) 2026 Jayant Som. All rights reserved.
+
+This software and its associated documentation files (the "Software") are proprietary. Subject to the terms and conditions of this License Agreement, the Copyright Holder grants users permission to view the source code solely for educational, academic review, and peer-evaluation purposes.
+
+1. RESTRICTIONS ON USE, MODIFICATION, AND DISTRIBUTION
+Except as explicitly authorized in writing by the Copyright Holder, any reproduction, modification, translation, compilation, public display, distribution, sublicensing, or publication of this Software, in whole or in part, by any means, is strictly prohibited. 
+
+2. MANDATORY FORK NOTIFICATION
+While GitHub’s Terms of Service permit technical hosting and native platform forking for repository viewing, any user who forks this repository is contractually obligated to immediately notify the Copyright Holder via email at jayant4195@gmail.com with a link to the fork and a brief statement of intent. Unauthorized modifications or use of code within a fork without written consent remains a violation of this copyright.
+
+3. COMMERCIAL USE AND CORPORATE ENTITIES
+Any use of this Software by, on behalf of, or in service to a commercial enterprise, corporation, company, or for-profit entity—including but not limited to internal testing, integration into commercial pipelines, training data derivation, or commercial deployment—is strictly prohibited without a separate, mutually signed commercial licensing and payment agreement. Commercial entities must contact the Copyright Holder at jayant4195@gmail.com to negotiate licensing terms and financial compensation prior to any interaction with the Software.
+
+4. ATTRIBUTION REQUIREMENTS
+If explicit, written permission to use or modify this Software is granted by the Copyright Holder, the user must include prominent and unambiguous attribution to Jayant Som in all copies, derived works, documentation, and public presentations, linking back to the original GitHub repository.
+
+5. CONTACT FOR PERMISSIONS
+To request written permission for any use case not explicitly granted under Section 1, you must contact the author and receive explicit confirmation through one of the following channels:
+- Email: jayant4195@gmail.com
+- LinkedIn: https://www.linkedin.com/in/jayantsom
+
+6. GOVERNING LAW AND JURISDICTION
+This License Agreement shall be governed by, construed, and enforced in accordance with the laws of the State of New York and the federal laws of the United States of America, without regard to conflict of law principles. Any legal action or proceeding arising under this License shall be brought exclusively in the federal or state courts located in the United States.
+
+7. DISCLAIMER OF LIABILITY (CRITICAL MEDICAL/AI PROTOTYPE NOTICE)
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE, OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. THIS SOFTWARE IS A PROTOTYPE DECISION SUPPORT PIPELINE AND IS NOT CERTIFIED FOR CLINICAL OR DIAGNOSTIC USE.
