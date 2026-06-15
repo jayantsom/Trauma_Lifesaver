@@ -25,5 +25,8 @@ To request written permission for any use case not explicitly granted under Sect
 6. GOVERNING LAW AND JURISDICTION
 This License Agreement shall be governed by, construed, and enforced in accordance with the laws of the State of New York and the federal laws of the United States of America, without regard to conflict of law principles. Any legal action or proceeding arising under this License shall be brought exclusively in the federal or state courts located in the United States.
 
-7. DISCLAIMER OF LIABILITY (CRITICAL MEDICAL/AI PROTOTYPE NOTICE)
+7. EFFECTIVE DATE AND RETROACTIVE APPLICATION
+This License Agreement is strictly effective retroactively as of January 1, 2026. Any and all forks, clones, downloads, local copies, or derivative implementations of this Software created, possessed, or maintained on or after January 1, 2026, are fully subject to and bound by the terms, restrictions, and mandatory notification requirements of this License. Continued possession or use of any clone or fork created after this date without complying with these terms constitutes copyright infringement.
+
+8. DISCLAIMER OF LIABILITY (CRITICAL MEDICAL/AI PROTOTYPE NOTICE)
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE, OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. THIS SOFTWARE IS A PROTOTYPE DECISION SUPPORT PIPELINE AND IS NOT CERTIFIED FOR CLINICAL OR DIAGNOSTIC USE.
