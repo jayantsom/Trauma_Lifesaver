@@ -1,14 +1,30 @@
-# Trauma Lifesaver: AI-Powered CT Triage & Clinical Decision Support
+<div align="center">
+
+# 🩺 Trauma Lifesaver
+
+### AI-Powered Multi-Layer CT Triage & Clinical Decision Support System
+
+[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
+[![Flask](https://img.shields.io/badge/Flask-3.0+-000000?style=flat-square&logo=flask&logoColor=white)](https://flask.palletsprojects.com/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.1+-EE4C2C?style=flat-square&logo=pytorch&logoColor=white)](https://pytorch.org)
+[![MedGemma](https://img.shields.io/badge/MedGemma-1.5--4b--it-red?style=flat-square)](https://huggingface.co/google/medgemma-1.5-4b-it)
+[![U-Net](https://img.shields.io/badge/U--Net-ResNet34-blue?style=flat-square)](https://github.com/qubvel/segmentation_models.pytorch)
+[![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4--mini-00A67E?style=flat-square&logo=openai&logoColor=white)](https://openai.com)
+[![License](https://img.shields.io/badge/License-Proprietary-yellow?style=flat-square)](LICENSE)
+
+*Upload abdominal CT slice series → AI performs zero-shot triage, segments hemorrhage, quantifies bleeding volumes, generates AAST/EAST-aligned reports, and retrieves PubMed citations — all with interactive chatbot support.*
+
+</div>
+
+---
 
 > [!WARNING]
 > **PROTOTYPE DECISION SUPPORT SYSTEM ONLY — NOT FOR CLINICAL OR DIAGNOSTIC USE**
 > This software is an experimental prototype designed for educational, academic review, and peer-evaluation purposes only. It is **intended for personal use only** under a strict proprietary license. See the [LICENSE](LICENSE) file for complete details and mandatory fork notification terms.
 
-Trauma Lifesaver is an advanced, multi-layer AI pipeline designed to automate the triage, segmentation, quantification, and clinical reporting of acute abdominal trauma from CT slice series. By combining vision-language models, specialized pixel-level segmenters, deterministic clinical logic, and real-time biomedical literature retrieval, the system provides emergency clinicians with rapid, reliable, and evidence-grounded decision support during high-pressure trauma resuscitation.
-
 ---
 
-## Why It Is Used
+## 💡 Why It Is Used
 
 In acute trauma care (e.g., high-impact motor vehicle accidents, falls, or penetrating wounds), **blunt abdominal trauma** is a leading cause of preventable mortality due to occult internal bleeding. 
 * **Time-Critical Triage**: Manually reviewing hundreds of CT slices can delay treatment. Trauma Lifesaver screens slice series in seconds to flag high-risk pathologies.
@@ -18,7 +34,7 @@ In acute trauma care (e.g., high-impact motor vehicle accidents, falls, or penet
 
 ---
 
-## What's New
+## ✨ What's New
 
 Unlike monolithic vision-language systems or single-task segmentation models, Trauma Lifesaver introduces:
 1. **Five-Layer Hybrid Architecture**: Seamlessly coordinates specialized models: **MedSigLIP** (fast zero-shot screening), **U-Net** (dense segmentation), **MedGemma 1.5** (multimodal clinical reasoning), and **GPT-4** (PubMed evidence synthesis).
@@ -28,48 +44,69 @@ Unlike monolithic vision-language systems or single-task segmentation models, Tr
 
 ---
 
-## Technology Stack
+## 🛠️ Technology Stack
 
-The application is built using a modern, lightweight, yet highly optimized medical AI stack:
-
-* **Frontend Dashboard**:
-  * **HTML5 & Vanilla Javascript (ES6)**: Handles drag-and-drop file upload, real-time status polling, and client-side PDF downloads.
-  * **CSS3 Variables & Grid**: Features a fully responsive dashboard with glassmorphism aesthetics, dynamic dark/light mode, and live analysis step trackers.
-  * **Server-Sent Events (SSE)**: For low-latency token streaming from the clinical Q&A assistant.
-* **Backend Framework**:
-  * **Flask (Python)**: Light backend orchestrator serving static templates, handling background job dispatching via daemon threads, and exposing clean JSON endpoints.
-* **Deep Learning & Inference**:
-  * **PyTorch**: Backing tensor computations and CUDA-accelerated operations.
-  * **Hugging Face Transformers & PEFT**: Runs zero-shot `MedSigLIP` and manages `MedGemma 1.5` 4-bit load with `BitsAndBytesConfig` + LoRA adapter integration.
-  * **Segmentation Models PyTorch (SMP)**: ResNet-34 backboned U-Net for dense semantic segmentation of hemorrhages.
-* **Report Generation**:
-  * **ReportLab**: Programmatically compiles clinical findings, AAST grades, and PubMed references into a download-ready PDF document.
-* **Agentic Research Layer**:
-  * **NCBI Entrez E-Utilities**: Direct API access (`esearch` + `efetch`) for live PubMed query execution.
-  * **OpenAI API**: Orchestrates `gpt-4.1-mini` for clinical summarization, citation matching, and grounded clinical Q&A.
+| Component | Technology / Model | Purpose / Details |
+| :--- | :--- | :--- |
+| **Frontend UI** | HTML5, Vanilla ES6 JS, CSS3 Variables | Drag-and-drop staging, theme-aware glassmorphism styling, poll tracking, and server-sent event (SSE) chat streaming. |
+| **Backend** | Python 3.10+, Flask | Multithreaded background processing, PDF reporting stream, static file serving, and JSON APIs. |
+| **Triage Model (L1)** | `google/medsiglip-448` | Lightweight zero-shot Vision-Language model for rating and filtering suspicious CT slices. |
+| **Reasoning Model (L2)** | `google/medgemma-1.5-4b-it` (LoRA adapter) | Quantized (4-bit) multimodal VLM for structural injury pattern analysis and diagnostic reasoning. |
+| **Segmenter (L3)** | ResNet-34 U-Net (via SMP) | Dense pixel-level segmentation of abdominal hemorrhage regions. |
+| **PDF Generation** | ReportLab | Programmatically builds formatted clinical PDF reports including patient vitals and findings. |
+| **Research & Q&A** | OpenAI GPT-4o-mini & NCBI Entrez | Live PubMed article retrieval (`esearch`/`efetch`), keyword ranking, and clinical Q&A grounding. |
 
 ---
 
-## Detailed Pipeline Architecture
+## 🏗️ Architecture
 
-The system operates through a sequential five-layer pipeline coordinated by the `TraumaPipeline` orchestrator:
-
-```mermaid
-flowchart TD
-    A[Upload CT Slices & Vitals] --> L1[Layer 1: CTTriager\nMedSigLIP-448]
-    L1 -->|Rank Slices & Detect Injury| L1_Filter{Is Slice Suspicious?}
-    
-    L1_Filter -->|Top Suspicious Slice| L2[Layer 2: Visual Analyzer\nMedGemma 1.5 + LoRA]
-    L1_Filter -->|All Slices| L3[Layer 3: Hemorrhage Segmenter\nResNet34 U-Net]
-    
-    L2 -->|Injury Pattern & Organs JSON| L4[Layer 4: Clinical Report Writer]
-    L3 -->|Binary Masks| Q[Quantifier\nVolume in mL]
-    Q -->|Volume, Risk Tier & ATLS Class| L4
-    
-    L4 -->|Assembled Case Context| RA[Research Agent\nPubMed APIs & GPT-4]
-    RA -->|Real PubMed Citations & Summaries| OUT[Final Analysis Package]
-    
-    OUT --> L5[Layer 5: QAStreamer\nDr. Gemma Q&A Chatbot]
+```
+                        ┌──────────────────────────────────┐
+                        │          Browser :7860           │
+                        │    HTML5 + JS + Theme-Aware CSS  │
+                        │   Status Polling & SSE Chat Widget │
+                        └────────────────┬─────────────────┘
+                                         │ HTTP / SSE
+                        ┌────────────────▼─────────────────┐
+                        │         Flask Server :7860        │
+                        │                                    │
+                        │  GET  / (Index Dashboard)          │
+                        │  POST /upload (Save slices & run)  │
+                        │  GET  /status/{job_id}             │
+                        │  GET  /download-report/{job_id}    │
+                        │  GET  /qa-stream (SSE Chat)        │
+                        └────────────────┬─────────────────┘
+                                         │
+                        ┌────────────────▼─────────────────┐
+                        │      TraumaPipeline Orchestrator  │
+                        │                                    │
+                        │  [Uploads] ──► [L1: CTTriager]     │
+                        │                    │               │
+                        │            (Rank & Filter)         │
+                        │                    │               │
+                        │           ┌────────┴────────┐      │
+                        │           ▼                 ▼      │
+                        │    [L2: CTVisual]    [L3: U-Net]   │
+                        │     (MedGemma+LoRA)  (Hemorrhage)  │
+                        │           │                 │      │
+                        │           │           [Quantifier] │
+                        │           │                 │      │
+                        │           └────────┬────────┘      │
+                        │                    ▼               │
+                        │          [L4: Clinical Report]     │
+                        └────────────────────┬───────────────┘
+                                             │ Context JSON
+                        ┌────────────────────▼───────────────┐
+                        │           ResearchAgent            │
+                        │   Queries PubMed, Ranks Articles,  │
+                        │   Synthesizes Context via OpenAI    │
+                        └────────┬───────────────────┬───────┘
+                                 │                   │
+                    ┌────────────▼─────────┐   ┌─────▼───────────────┐
+                    │  NCBI PubMed API     │   │  OpenAI API         │
+                    │  (eutils.ncbi.gov)   │   │  gpt-4.1-mini       │
+                    │  (PubMed citations)  │   │  (Summarization)    │
+                    └──────────────────────┘   └─────────────────────┘
 ```
 
 ### The Five-Layer Pipeline Breakdown:
@@ -83,7 +120,7 @@ flowchart TD
 
 ---
 
-## System Workflow & Execution Steps
+## 🔄 System Workflow & Execution Steps
 
 The backend handles incoming analysis requests through a non-blocking background queue to keep the Flask UI responsive. Below is the step-by-step process of a single analysis execution:
 
@@ -125,7 +162,7 @@ The backend handles incoming analysis requests through a non-blocking background
 
 ---
 
-## How to Setup Local
+## 🚀 How to Setup Local
 
 ### Prerequisites
 * Windows or Linux OS
@@ -165,7 +202,7 @@ The backend handles incoming analysis requests through a non-blocking background
 
 ---
 
-## How to Setup Online
+## 🌐 How to Setup Online
 
 ### Option A: Google Colab (Recommended for Free GPU Access)
 1. Open a new Google Colab notebook with a **T4 GPU** runtime.
@@ -192,7 +229,7 @@ The backend handles incoming analysis requests through a non-blocking background
 
 ---
 
-## Trainings
+## 📊 Trainings
 
 The repository contains scripts and Jupyter notebooks to train/fine-tune the core ML models:
 
@@ -209,7 +246,7 @@ The repository contains scripts and Jupyter notebooks to train/fine-tune the cor
 
 ---
 
-## Future Scope
+## 🔮 Future Scope
 
 * **Vector Database Integration**: Implement local vector embeddings (using ChromaDB or FAISS) to cache and index PubMed papers for rapid, offline literature matching.
 * **3D Volumetric Segmentation**: Upgrade the U-Net from 2.5D slices to a true 3D architecture (e.g., Swin UNETR) to analyze entire NIfTI files natively.
@@ -218,7 +255,7 @@ The repository contains scripts and Jupyter notebooks to train/fine-tune the cor
 
 ---
 
-## License & Intended Use
+## 📄 License & Intended Use
 
 This project is **intended for personal use, academic evaluation, and peer review only**. It is governed by a proprietary and source-available license. 
 
@@ -228,9 +265,8 @@ This project is **intended for personal use, academic evaluation, and peer revie
 
 ---
 
-## Author & Contact
+## 👥 Author & Contact
 
 Developed by **Jayant Som**.
 * **LinkedIn**: [Jayant Som](https://www.linkedin.com/in/jayantsom)
 * **Email**: [jayant4195@gmail.com](mailto:jayant4195@gmail.com)
-
